@@ -9,6 +9,7 @@ use mongodb::{Client, options::ClientOptions};
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+use std::collections::HashMap;
 
 /*
 
@@ -20,7 +21,7 @@ Registering is not possible yet because I haven't set up the DB lol
 */
 
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash)]
 struct Profile
 {
     
@@ -148,6 +149,51 @@ fn register_profile()
 
 }
 
+fn select_profile() -> Profile
+{
+    /*
+        Function prompts user to select a profile. If invalid profile is selected, returns an empty profile.
+     */
+    utils::clear();
+    println!("Please select one of your profiles: \n \n");
+    let mut profile_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
+    deserialize_profile_data(&mut profile_data);
+    let mut counter: i32 = 0;
+    let mut profile_hashmap: HashMap<i32, Profile> = HashMap::new();
+    for profile in profile_data.profiles
+    {
+        counter += 1;
+        let new_profile: Profile = Profile { username: String::from(&profile.username), password: String::from(&profile.username), account_uuid: String::from(&profile.username) };
+        profile_hashmap.insert(counter, profile);
+        println!("{} | ({})", utils::pad_string(String::from(&new_profile.username), 16), counter)
+
+    }
+    let mut selection: String = String::new();
+    io::stdin().read_line(&mut selection).expect("Failed to read line.");
+    selection.pop();
+    let selected_profile: Profile =
+    {
+        let hash_obj: Option<&Profile> = profile_hashmap.get(&selection.as_str().parse::<i32>().unwrap());
+        match hash_obj
+        {
+            None => Profile { username: String::new(), password: String::new(), account_uuid: String::new()},
+            _    => Profile {username: String::from(&hash_obj.unwrap().username), password: String::from(&hash_obj.unwrap().password), account_uuid: String::from(&hash_obj.unwrap().account_uuid)}
+        }   
+    };
+    // this language weird bruh
+    selected_profile
+}
+
+pub fn login_select_profile()
+{
+    let selected_profile: Profile =
+    {
+        select_profile()
+    };
+    println!("You selected profile {}", &selected_profile.username)
+}
+
+
 
 pub fn login_init()
 {
@@ -167,7 +213,7 @@ pub fn login_init()
         match selection.as_str()
         {
             "1" => register_profile(),
-            "2" => println!("Awaiting functionality."),
+            "2" => login_select_profile(),
             "3" => std::process::exit(0),
             _   => login_init()
         }

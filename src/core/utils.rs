@@ -19,3 +19,14 @@ pub fn clear()
     
     );
 }
+
+pub fn pad_string(mut string: String, mut length: i32) -> String
+{
+    let len: i32 = string.chars().count().try_into().unwrap();
+    length -= len;
+    for i in 0..length
+    {
+        string.push(' ');
+    }
+    string
+}
