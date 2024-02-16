@@ -1,10 +1,10 @@
 extern crate dotenv;
-mod utilities;
 use dotenv::dotenv;
 use std::io;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use uuid::Uuid;
+use super::utils;
 
 /*
 
@@ -38,8 +38,18 @@ fn validate_login_info(username: &str, password: &str)
     
 }
 
-fn register_profile(username: &str, password: &str)
+fn register_profile()
 {
+    utils::clear();
+    let mut username: String = String::new();
+    println!("Enter the username for your new profile. This will be your display name. : ");
+    io::stdin().read_line(&mut username).expect("Uh oh! Failed to read the line.");
+    let mut password: String = String::new();
+    println!("Enter the password for your new profile. : ");
+    io::stdin().read_line(&mut password).expect("Uh oh! Failed to read the line.");
+    username.pop(); 
+    password.pop();
+
     let new_profile: Profile = Profile{username: String::from(username), password: String::from(password), account_uuid: Uuid::new_v4().to_string()};
     /*
     
@@ -50,6 +60,7 @@ fn register_profile(username: &str, password: &str)
 
      */
     let serialized_profile: Result<String, serde_json::Error> = to_string(&new_profile);
+    utils::clear();
     if serialized_profile.is_ok()
     {
         println!("{}", serialized_profile.ok().unwrap())
@@ -63,36 +74,26 @@ fn register_profile(username: &str, password: &str)
 }
 
 
-fn record_login_info()
-{
-    let mut username: String = String::new();
-    println!("Enter the username for your new profile. This will be your display name. : ");
-    io::stdin().read_line(&mut username).expect("Uh oh! Failed to read the line.");
-    let mut password: String = String::new();
-    println!("Enter the password for your new profile. : ");
-    io::stdin().read_line(&mut password).expect("Uh oh! Failed to read the line.");
-    username.pop(); 
-    password.pop();
-    register_profile(&username, &password);
-
-}
-
 pub fn login_init()
 {
+    utils::clear();
     dotenv().ok();
     if dotenv::var("UUID").unwrap() == ""
-    {
+    {   
         println!("Looks like you're not logged in. Let's fix that. \n \n");
-        if dotenv::var("PROFILECOUNT").unwrap() == "0"
+        println!("Register New Profile    (1)");
+        println!("Select Existing Profile (2)");
+        println!("Exit                    (3)");
+
+        let mut selection: String = String::new();
+        io::stdin().read_line(&mut selection).expect("Failed to read the line.");
+        selection.pop();
+        match selection.as_str()
         {
-            println!("Couldn't find any profiles for you. Let's set up a new profile. \n");
-            utilities::clear();
-            crate::login::record_login_info();
-        }
-        else
-        {
-           println!("Please select from one of your profiles, or register a new profile.")
-           // there will be something here that shows existing profiles. 
+            "1" => register_profile(),
+            "2" => println!("Awaiting functionality."),
+            "3" => std::process::exit(0),
+            _   => login_init()
         }
     }
     else

@@ -1,5 +1,10 @@
-mod login;
-mod messenger;
+pub mod core {
+    pub mod login;
+    pub mod messenger;
+    pub mod utils;
+}
+
 fn main() {
-    login::login_init();
+    core::utils::clear();
+    core::login::login_init();
 }
