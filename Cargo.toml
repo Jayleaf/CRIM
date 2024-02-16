@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
+mongodb = "2.8.1"
 serde = "1.0.196"
 serde_derive = "1.0.196"
 serde_json = "1.0.113"

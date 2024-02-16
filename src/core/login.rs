@@ -5,6 +5,10 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use uuid::Uuid;
 use super::utils;
+use mongodb::{Client, options::ClientOptions};
+use std::fs;
+use std::fs::File;
+use std::io::prelude::*;
 
 /*
 
@@ -25,16 +29,83 @@ struct Profile
     account_uuid: String
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+struct ProfileContainer
+{
+    profiles: Vec<Profile>
+}
 
-fn validate_login_info(username: &str, password: &str)
+fn deserialize_profile_data(holder: &mut ProfileContainer)
+{
+    /*
+        Deserialize the data in the profiles json file, and return it. Could be a utility function, but it's only used here.
+     */
+
+    let mut f: File = fs::File::open("src/userdata/profiles.json").unwrap();
+    let mut data: String = String::new();
+    f.read_to_string(&mut data).unwrap();
+    let profiles: ProfileContainer = {
+        let pc: Result<_, serde_json::Error> = serde_json::from_str(&data.as_str());
+        if pc.is_ok()
+        {
+            pc.unwrap()
+        }
+        else
+        {
+            ProfileContainer{profiles: Vec::new()}
+        }
+    };
+
+    *holder = profiles;
+
+}
+
+fn serialize_profile_data(container: ProfileContainer)
+{
+    let serialized_data: Result<String, serde_json::Error> = to_string(&container);
+    fs::write("src/userdata/profiles.json", &serialized_data.unwrap()).expect("Failed to write.")
+}
+
+
+fn validate_login_info(username: &str, password: &str) -> bool
 {
     /*
     
         First, ensure that whatever profile we're trying to sign into is in profiles.json.
         Then, check it against the database to ensure the account exists.
-        If successful, log in.
+        If successful, return true.
+
+        This function can easily broken up and modified for exploitation, but this function serves no major purpose except error prevention.
+        This function has no real effect in logging in, the login function does all of that.
 
      */
+
+    let mut status: bool = false;
+
+
+     let mut profile_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
+     deserialize_profile_data(&mut profile_data);
+     for profile in profile_data.profiles
+     {
+        if profile.username == username && profile.password == password
+        {
+            status = true;
+            break;
+        }
+        else
+        {
+            status = false;
+        }
+     }
+
+     /*
+        for logging in, this will be the method.
+        query mongodb for the account ID of the matching profile.
+        if successful, return the account ID and log in.
+
+    */
+
+    status
     
 }
 
@@ -50,33 +121,38 @@ fn register_profile()
     username.pop(); 
     password.pop();
 
-    let new_profile: Profile = Profile{username: String::from(username), password: String::from(password), account_uuid: Uuid::new_v4().to_string()};
-    /*
-    
-        Code here will connect to the mongoDB server here.
-        First we will check for an already-existing username, and if there is one the user will be prompted to create a new username.
-        Then, we check for an already existing account uuid. This is just a safety measure since it's incredibly unlikely it will ever happen, but it's better to be safe than sorry.
-        If all is clear, we register the account in the database.
-
-     */
+    let new_profile: Profile = Profile{username: String::from(&username), password: String::from(&password), account_uuid: Uuid::new_v4().to_string()};
     let serialized_profile: Result<String, serde_json::Error> = to_string(&new_profile);
     utils::clear();
-    if serialized_profile.is_ok()
+    
+    // save the data to profiles.json here.
+
+    let mut deserialized_data: ProfileContainer = ProfileContainer{profiles: Vec::new()};
+    deserialize_profile_data(&mut deserialized_data);
+    deserialized_data.profiles.push(new_profile);
+    serialize_profile_data(deserialized_data);
+    
+
+    // write to the mongodb database here, soon.
+
+    println!("Created profile. Validating...");
+    let validation_status: bool = validate_login_info(&username, &password);
+    if validation_status == true
     {
-        println!("{}", serialized_profile.ok().unwrap())
+        println!("Profile Validated. Return to login screen...")
     }
     else
     {
-        println!("{:#?}", serialized_profile.err());
+        println!("Profile was not validated. Return to login screen.")
     }
-    
-    // save the data to profiles.json here.
+
 }
 
 
 pub fn login_init()
 {
     utils::clear();
+    println!("{}", std::env::current_dir().unwrap().display());
     dotenv().ok();
     if dotenv::var("UUID").unwrap() == ""
     {   
