@@ -1,0 +1,9 @@
+brace_style = "AlwaysNextLine"
+control_brace_style = "AlwaysNextLine"
+enum_discrim_align_threshold = 10
+fn_params_layout = "Compressed"
+fn_single_line = true
+hard_tabs = true
+imports_layout = "Horizontal"
+max_width = 1000 #can we get much higher? so highhhh
+struct_lit_width = 1000 #ohhh ohhh ohhh
