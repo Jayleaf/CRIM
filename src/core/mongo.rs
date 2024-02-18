@@ -2,10 +2,12 @@ use mongodb::sync::Database;
 use mongodb::{
 	bson::doc, options::{ClientOptions, ServerApi, ServerApiVersion}, sync::Client
 };
+use stopwatch::{Stopwatch};
 
 fn init_mongo() -> mongodb::error::Result<Client>
 {
 	println!("Connecting to server...");
+	let sw: Stopwatch = Stopwatch::start_new();
 	let uri = format!("mongodb+srv://{}:{}@cluster-01.myeybv2.mongodb.net/?retryWrites=true&w=majority", dotenv::var("DB_USERNAME").unwrap(), dotenv::var("DB_PASS").unwrap());
 	let mut client_options = ClientOptions::parse(uri)?;
 	// Set the server_api field of the client_options object to set the version of the Stable API on the client
@@ -15,7 +17,7 @@ fn init_mongo() -> mongodb::error::Result<Client>
 	let client = Client::with_options(client_options)?;
 	// Ping the server to see if you can connect to the cluster
 	client.database("admin").run_command(doc! {"ping": 1}, None)?;
-	println!("Connected to server!");
+	println!("Connected to server! Connection took {}s.", (sw.elapsed_ms() / 1000).to_string());
 	Ok(client)
 }
 
