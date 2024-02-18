@@ -1,7 +1,8 @@
 extern crate dotenv;
 use super::utils;
+use super::mongo;
 use dotenv::dotenv;
-use mongodb::{options::ClientOptions, Client};
+use mongodb::{ bson::doc, bson::Document, bson::to_document, sync::Client };
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use std::collections::HashMap;
@@ -27,7 +28,7 @@ Structs
 
 */
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 struct Profile
 {
 	username: String,
@@ -39,14 +40,6 @@ struct Profile
 impl Default for Profile
 {
 	fn default() -> Profile { Profile { username: String::new(), password: String::new(), account_uuid: String::new() } }
-}
-
-impl Profile
-{
-	fn from_ref(profile_ref: &Profile) -> Profile
-	{
-		Profile{username: String::from(&profile_ref.username), password: String::from(&profile_ref.password), account_uuid: String::from(&profile_ref.account_uuid)}
-	}
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -157,13 +150,20 @@ fn register_profile()
 
 	let mut deserialized_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
 	deserialize_profile_data(&mut deserialized_data);
-	deserialized_data.profiles.push(Profile::from_ref(&new_profile));
+	deserialized_data.profiles.push(Profile::clone(&new_profile));
 	serialize_profile_data(deserialized_data);
 
-	// write to the mongodb database here, soon.
+	/*
+		mang- i mean mongo time!
+	 */
+
+	let db = mongo::get_database("CRIM");
+	let coll = db.collection::<Document>("accounts");
+	let doc: Result<Document, mongodb::bson::ser::Error> = to_document(&serde_json::to_value(&new_profile).unwrap());
+	let _ = coll.insert_one(doc.unwrap(), None);
 
 	println!("Created profile. Validating...");
-	let validation_status: bool = validate_login_info(&Profile::from_ref(&new_profile));
+	let validation_status: bool = validate_login_info(&Profile::clone(&new_profile));
 	if validation_status == true
 	{
 		println!("Profile Validated. Return to login screen...");
@@ -191,9 +191,8 @@ fn select_profile() -> Profile
 		for profile in profile_data.profiles
 		{
 			counter += 1;
-			let new_profile: Profile = Profile { username: String::from(&profile.username), password: String::from(&profile.username), account_uuid: String::from(&profile.username) };
-			profile_hashmap.insert(counter, profile);
-			println!("{} | ({})", utils::pad_string(String::from(&new_profile.username), 16), counter);
+			profile_hashmap.insert(counter, Profile::clone(&profile));
+			println!("{} | ({})", utils::pad_string(String::from(&profile.username), 16), counter);
 		}
 		let mut selection: String = String::new();
 		io::stdin().read_line(&mut selection).expect("Failed to read line.");
@@ -212,7 +211,7 @@ fn select_profile() -> Profile
 				_ => Profile { username: String::from(&hash_obj.unwrap().username), password: String::from(&hash_obj.unwrap().password), account_uuid: String::from(&hash_obj.unwrap().account_uuid) },
 			}
 		};
-		if validate_login_info(&Profile::from_ref(&potential_selected_profile)) == true
+		if validate_login_info(&Profile::clone(&potential_selected_profile)) == true
 		{
 			// uhhhh maybe scope problem!?!?!?!?!?! idk
 			selected_profile = potential_selected_profile;
@@ -239,7 +238,11 @@ pub fn login_select_profile()
 	/*
 		Call to login. Now the shitshow begins.
 	 */
-	let res: bool = login(selected_profile); // hand over ownership, because who cares? we don't need this anymore.
+	let res: bool = login(Profile::clone(&selected_profile)); // 
+	if res == true
+	{
+		println!("Successfully logged you in as {}. Opening messenger...", &selected_profile.username.red())
+	}
 }
 
 pub fn login_init()
