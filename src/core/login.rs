@@ -33,18 +33,22 @@ struct Profile
 {
 	username: String,
 	password: String,
-	account_uuid: String,
 }
 
 impl Default for Profile
 {
-	fn default() -> Profile { Profile { username: String::new(), password: String::new(), account_uuid: String::new() } }
+	fn default() -> Profile { Profile { username: String::new(), password: String::new() } }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 struct ProfileContainer
 {
 	profiles: Vec<Profile>,
+}
+
+struct Token
+{
+	token: String
 }
 
 /*
@@ -61,7 +65,8 @@ fn deserialize_profile_data(holder: &mut ProfileContainer)
 
 	let mut f: File = fs::File::open("src/userdata/profiles.json").unwrap();
 	let mut data: String = String::new();
-	f.read_to_string(&mut data).unwrap();
+	f.read_to_string(&mut data).unwrap(); 
+	// ^^ should not really ever fail. if it does, somebody tampered with profiles.json.
 	let profiles: ProfileContainer = {
 		let pc: Result<_, serde_json::Error> = serde_json::from_str(&data.as_str());
 		if pc.is_ok()
@@ -115,11 +120,10 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 	}
 
 	/*
-		for logging in, this will be the method.
-		query mongodb for the account ID of the matching profile.
-		if successful, return the account ID and log in.
-
-	*/
+	|	for logging in, this will be the method.
+	|	query mongodb for the account ID of the matching profile.
+	|	if successful, return the account ID and log in.
+	=================================================================*/
 
 	status
 }
@@ -133,17 +137,33 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 fn register_profile()
 {
 	utils::clear();
+	let db = mongo::get_database("CRIM");
+	let coll = db.collection::<Document>("accounts");
 	let mut username: String = String::new();
 	println!("Enter the username for your new profile. This will be your display name. : ");
 	io::stdin().read_line(&mut username).expect("Uh oh! Failed to read the line.");
+	
+	// check username uniquity
+	let cursor = coll.find(doc! { "username": &username }, None).unwrap();
+	let mut iter = cursor.peekable();
+	// this shit doesn't work, fix it.
+	if iter.peek().is_some()
+	{
+		println!("Found duplicate!")
+	}
+	else
+	{
+		println!("No duplicate.")
+	}
+
 	let mut password: String = String::new();
 	println!("Enter the password for your new profile. : ");
 	io::stdin().read_line(&mut password).expect("Uh oh! Failed to read the line.");
 	username.pop();
 	password.pop();
 
-	let new_profile: Profile = Profile { username: String::from(&username), password: String::from(&password), account_uuid: Uuid::new_v4().to_string() };
-	utils::clear();
+	let new_profile: Profile = Profile { username: String::from(&username), password: String::from(&password)};
+	//utils::clear();
 
 	// save the data to profiles.json here.
 
@@ -156,10 +176,12 @@ fn register_profile()
 	   mang- i mean mongo time!
 	*/
 
-	let db = mongo::get_database("CRIM");
-	let coll = db.collection::<Document>("accounts");
+
 	let doc: Result<Document, mongodb::bson::ser::Error> = to_document(&serde_json::to_value(&new_profile).unwrap());
+	// handle this better
 	let _ = coll.insert_one(doc.unwrap(), None);
+	// retrieve token (entry ID)
+	//coll.find_one()
 
 	println!("Created profile. Validating...");
 	let validation_status: bool = validate_login_info(&Profile::clone(&new_profile));
@@ -212,8 +234,8 @@ fn select_profile() -> Profile
 			};
 			match hash_obj
 			{
-				None => Profile { username: String::new(), password: String::new(), account_uuid: String::new() },
-				_ => Profile { username: String::from(&hash_obj.unwrap().username), password: String::from(&hash_obj.unwrap().password), account_uuid: String::from(&hash_obj.unwrap().account_uuid) },
+				None => Profile::default(),
+				_ => Profile { username: String::from(&hash_obj.unwrap().username), password: String::from(&hash_obj.unwrap().password)}
 			}
 		};
 		if validate_login_info(&Profile::clone(&potential_selected_profile)) == true
@@ -253,7 +275,6 @@ pub fn login_select_profile()
 pub fn login_init()
 {
 	utils::clear();
-	println!("{}", std::env::current_dir().unwrap().display());
 	println!("Welcome to CRIM. \n");
 	println!("Register New Profile    (1)");
 	println!("Select Existing Profile (2)");
