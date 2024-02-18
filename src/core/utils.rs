@@ -9,17 +9,20 @@ use colored::{Colorize, CustomColor};
 pub fn clear()
 {
 	/*
-		Clears terminal and throws the logo up. Because, you know, it's cool.
-	 */
+	   Clears terminal and throws the logo up. Because, you know, it's cool.
+	*/
 	print!("{}[2J", 27 as char);
-	println!("{}", r"
+	println!(
+		"{}",
+		r"
 	 _____  _____ _____ __  __
 	/  __ \| ___ \_   _|  \/  |
 	| /  \/| |_/ / | | | .  . |
 	| |    |    /  | | | |\/| |
 	| \__/\| |\ \ _| |_| |  | |
 	 \____/\_| \_|\___/\_|  |_/
-	".custom_color(CustomColor {r: 100, g: 0, b: 0})
+	"
+		.custom_color(CustomColor { r: 100, g: 0, b: 0 })
 	);
 }
 

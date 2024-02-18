@@ -2,8 +2,8 @@ pub mod core
 {
 	pub mod login;
 	pub mod messenger;
-	pub mod utils;
 	pub mod mongo;
+	pub mod utils;
 }
 
 fn main()

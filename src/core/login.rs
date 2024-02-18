@@ -1,8 +1,9 @@
 extern crate dotenv;
-use super::utils;
 use super::mongo;
+use super::utils;
+use colored::Colorize;
 use dotenv::dotenv;
-use mongodb::{ bson::doc, bson::Document, bson::to_document, sync::Client };
+use mongodb::{bson::doc, bson::to_document, bson::Document, sync::Client};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use std::collections::HashMap;
@@ -11,7 +12,6 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use uuid::Uuid;
-use colored::Colorize;
 
 /*
 
@@ -35,7 +35,6 @@ struct Profile
 	password: String,
 	account_uuid: String,
 }
-
 
 impl Default for Profile
 {
@@ -154,8 +153,8 @@ fn register_profile()
 	serialize_profile_data(deserialized_data);
 
 	/*
-		mang- i mean mongo time!
-	 */
+	   mang- i mean mongo time!
+	*/
 
 	let db = mongo::get_database("CRIM");
 	let coll = db.collection::<Document>("accounts");
@@ -201,8 +200,14 @@ fn select_profile() -> Profile
 		let potential_selected_profile: Profile = {
 			let hash_obj: Option<&Profile> = {
 				// Try to handle all cases of invalid inputs.
-				if selection.as_str() == "B" || selection.as_str() == "b" { login_init() }
-				if selection.as_str().parse::<i32>().is_err() { continue }
+				if selection.as_str() == "B" || selection.as_str() == "b"
+				{
+					login_init()
+				}
+				if selection.as_str().parse::<i32>().is_err()
+				{
+					continue;
+				}
 				profile_hashmap.get(&selection.as_str().parse::<i32>().unwrap())
 			};
 			match hash_obj
@@ -225,8 +230,8 @@ fn login(p: Profile) -> bool
 {
 	validate_login_info(&p);
 	/*
-		You'd do mongo validation here.
-	 */
+	   You'd do mongo validation here.
+	*/
 	false
 }
 
@@ -236,9 +241,9 @@ pub fn login_select_profile()
 	utils::clear();
 	println!("Logging you in with local profile {}...", &selected_profile.username.red());
 	/*
-		Call to login. Now the shitshow begins.
-	 */
-	let res: bool = login(Profile::clone(&selected_profile)); // 
+	   Call to login. Now the shitshow begins.
+	*/
+	let res: bool = login(Profile::clone(&selected_profile)); //
 	if res == true
 	{
 		println!("Successfully logged you in as {}. Opening messenger...", &selected_profile.username.red())
@@ -249,27 +254,19 @@ pub fn login_init()
 {
 	utils::clear();
 	println!("{}", std::env::current_dir().unwrap().display());
-	dotenv().ok();
-	if dotenv::var("UUID").unwrap() == ""
-	{
-		println!("Looks like you're not logged in. Let's fix that. \n \n");
-		println!("Register New Profile    (1)");
-		println!("Select Existing Profile (2)");
-		println!("Exit                    (3)");
+	println!("Welcome to CRIM. \n");
+	println!("Register New Profile    (1)");
+	println!("Select Existing Profile (2)");
+	println!("Exit                    (3)");
 
-		let mut selection: String = String::new();
-		io::stdin().read_line(&mut selection).expect("Failed to read the line.");
-		selection.pop();
-		match selection.as_str()
-		{
-			"1" => register_profile(),
-			"2" => login_select_profile(),
-			"3" => std::process::exit(0),
-			_ => login_init(),
-		}
-	}
-	else
+	let mut selection: String = String::new();
+	io::stdin().read_line(&mut selection).expect("Failed to read the line.");
+	selection = String::from(selection.trim());
+	match selection.as_str()
 	{
-		println!("You're logged in.")
+		"1" => register_profile(),
+		"2" => login_select_profile(),
+		"3" => std::process::exit(0),
+		_ => login_init(),
 	}
 }
