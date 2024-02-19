@@ -16,7 +16,6 @@ use std::io::prelude::*;
 This file handles the login system of CRIM.
 Profiles.json is a local cache of accounts, to allow for quick sign in.
 Any account that is being logged in with will be checked against the account database in the server so as to prevent fake accounts; registering is necessary.
-Registering is not possible yet because I haven't set up the DB lol
 
 */
 
