@@ -144,23 +144,20 @@ fn register_profile()
 	io::stdin().read_line(&mut username).expect("Uh oh! Failed to read the line.");
 	
 	// check username uniquity
-	let cursor = coll.find(doc! { "username": &username }, None).unwrap();
-	let mut iter = cursor.peekable();
-	// this shit doesn't work, fix it.
-	if iter.peek().is_some()
+	let unique_query: Option<Document> = coll.find_one(doc! {"username": &username}, None).unwrap();
+	// if it exists, return to the start of the function.
+	// if it doesn't, continue.
+	if unique_query.is_some()
 	{
-		println!("Found duplicate!")
-	}
-	else
-	{
-		println!("No duplicate.")
+		println!("Username already exists. Please try again.");
+		register_profile();
 	}
 
 	let mut password: String = String::new();
 	println!("Enter the password for your new profile. : ");
 	io::stdin().read_line(&mut password).expect("Uh oh! Failed to read the line.");
-	username.pop();
-	password.pop();
+	username = String::from(username.trim());
+	password = String::from(password.trim());
 
 	let new_profile: Profile = Profile { username: String::from(&username), password: String::from(&password)};
 	//utils::clear();
