@@ -46,6 +46,7 @@ struct ProfileContainer
 	profiles: Vec<Profile>,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
 struct Token
 {
 	token: String
@@ -103,9 +104,10 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 	   This function can easily broken up and modified for exploitation, but this function serves no major purpose except error prevention.
 	   This function has no real effect in logging in, the login function does all of that.
 
+
 	*/
 
-	let mut status: bool = false;
+
 
 	let mut profile_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
 	deserialize_profile_data(&mut profile_data);
@@ -113,19 +115,22 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 	{
 		if profile.username == profile_to_be_validated.username && profile.password == profile_to_be_validated.password
 		{
-			status = true;
 			break;
 		}
-		status = false;
+		return false
 	}
 
-	/*
-	|	for logging in, this will be the method.
-	|	query mongodb for the account ID of the matching profile.
-	|	if successful, return the account ID and log in.
-	=================================================================*/
+	// check db
 
-	status
+	let db: mongodb::sync::Database = mongo::get_database("CRIM");
+	let coll: mongodb::sync::Collection<Document> = db.collection::<Document>("accounts");
+	let query: Option<Document> = coll.find_one(doc! {"username": &profile_to_be_validated.username, "password": &profile_to_be_validated.password}, None).unwrap();
+	if !query.is_some()
+	{
+		return false
+	}
+
+	true
 }
 
 /*
@@ -134,15 +139,26 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 
 */
 
-fn register_profile()
+fn register_profile(addl_message: Option<String>)
 {
+
+	/*
+	|  Function to register a new profile.
+	|  This function will prompt the user for a username and password, and then save it to profiles.json and the database, if the username is unique.
+	|  If the username is not unique, the function will return to the start of the function.
+	/===================================*/
+
 	utils::clear();
+	if addl_message.is_some()
+	{
+		println!("{}", addl_message.unwrap().red());
+	}
 	let db = mongo::get_database("CRIM");
 	let coll = db.collection::<Document>("accounts");
 	let mut username: String = String::new();
 	println!("Enter the username for your new profile. This will be your display name. : ");
 	io::stdin().read_line(&mut username).expect("Uh oh! Failed to read the line.");
-	
+	username = String::from(username.trim());
 	// check username uniquity
 	let unique_query: Option<Document> = coll.find_one(doc! {"username": &username}, None).unwrap();
 	// if it exists, return to the start of the function.
@@ -150,13 +166,12 @@ fn register_profile()
 	if unique_query.is_some()
 	{
 		println!("Username already exists. Please try again.");
-		register_profile();
+		register_profile(Some(String::from("Username already exists. Please try again.")));
 	}
 
 	let mut password: String = String::new();
 	println!("Enter the password for your new profile. : ");
 	io::stdin().read_line(&mut password).expect("Uh oh! Failed to read the line.");
-	username = String::from(username.trim());
 	password = String::from(password.trim());
 
 	let new_profile: Profile = Profile { username: String::from(&username), password: String::from(&password)};
@@ -176,27 +191,35 @@ fn register_profile()
 
 	let doc: Result<Document, mongodb::bson::ser::Error> = to_document(&serde_json::to_value(&new_profile).unwrap());
 	// handle this better
-	let _ = coll.insert_one(doc.unwrap(), None);
-	// retrieve token (entry ID)
-	//coll.find_one()
-
+	let pushed_doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
+	let token: mongodb::bson::Bson = pushed_doc.unwrap().inserted_id;
+	// write the token to token.json using serde_json
+	let token_obj: Token = Token { token: token.to_string() };
+	let token_json_str = to_string(&token_obj).unwrap();
+	fs::write("src/userdata/token.json", token_json_str).expect("Failed to write token to file. Please ensure you have a token.json file existing.");
 	println!("Created profile. Validating...");
 	let validation_status: bool = validate_login_info(&Profile::clone(&new_profile));
 	if validation_status == true
 	{
-		println!("Profile Validated. Return to login screen...");
+		println!("Profile Validated. Logging you in...");
+		login(Profile::clone(&new_profile));
 	}
 	else
 	{
 		println!("Profile was not validated. Return to login screen.");
+		login_init();
 	}
 }
 
-fn select_profile() -> Profile
+fn select_profile() -> Result<Profile, &'static str>
 {
 	/*
-	   Function prompts user to select a profile. If invalid profile is selected, returns an empty profile.
-	*/
+	|
+	|  This function selects a profile from profiles.json, validates it against the database, and returns the profile if successful.
+	|  This function additionally saves the token to token.json.
+	|  
+	/===================================*/
+
 	let mut selected_profile: Profile = Profile::default();
 	while true
 	{
@@ -237,28 +260,45 @@ fn select_profile() -> Profile
 		};
 		if validate_login_info(&Profile::clone(&potential_selected_profile)) == true
 		{
-			// uhhhh maybe scope problem!?!?!?!?!?! idk
 			selected_profile = potential_selected_profile;
 			break;
 		}
+		else
+		{
+			return Err("Selected profile was invalid. Please try again.")
+		}
 	}
-	selected_profile
+	Ok(selected_profile)
 }
 
 fn login(p: Profile) -> bool
 {
 	validate_login_info(&p);
-	/*
-	   You'd do mongo validation here.
-	*/
+	// 
 	false
 }
 
 pub fn login_select_profile()
 {
-	let selected_profile: Profile = { select_profile() };
-	utils::clear();
-	println!("Logging you in with local profile {}...", &selected_profile.username.red());
+	let selected_profile: Profile =
+	{ 
+		match select_profile()
+		{
+			Ok(p) =>
+			{
+				utils::clear();
+				println!("Profile validated. Logging you in...");
+				p
+			}
+			Err(e) =>
+			{
+				utils::clear();
+				println!("{}", e.red());
+				return login_select_profile()
+			}
+		};
+		Profile::default() // this should NEVER run. only here because rust will babyrage if I don't
+	};
 	/*
 	   Call to login. Now the shitshow begins.
 	*/
@@ -282,7 +322,7 @@ pub fn login_init()
 	selection = String::from(selection.trim());
 	match selection.as_str()
 	{
-		"1" => register_profile(),
+		"1" => register_profile(None),
 		"2" => login_select_profile(),
 		"3" => std::process::exit(0),
 		_ => login_init(),
