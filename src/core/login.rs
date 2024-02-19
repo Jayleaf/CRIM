@@ -2,7 +2,6 @@ extern crate dotenv;
 use super::mongo;
 use super::utils;
 use colored::Colorize;
-use dotenv::dotenv;
 use mongodb::{bson::doc, bson::to_document, bson::Document, sync::Client};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
@@ -11,7 +10,6 @@ use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use uuid::Uuid;
 
 /*
 
@@ -97,30 +95,14 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 {
 	/*
 
-	   First, ensure that whatever profile we're trying to sign into is in profiles.json.
-	   Then, check it against the database to ensure the account exists.
-	   If successful, return true.
+	   This function used to check profiles.json for login info, but now it only checks the database.
+	   This is because checking profiles.json is quite literally pointless, and checking profiles.json would mean that
+	   a profile would be considered invalid if the profiles.json data was lost
 
-	   This function can easily broken up and modified for exploitation, but this function serves no major purpose except error prevention.
-	   This function has no real effect in logging in, the login function does all of that.
-
+	   This also leaves the door open to a simple username:password login system.
+	   Maybe also instead of storing profile username and passwords, you could only store the username since they must be unique; passwords laying around is a risk.
 
 	*/
-
-
-
-	let mut profile_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
-	deserialize_profile_data(&mut profile_data);
-	for profile in profile_data.profiles
-	{
-		if profile.username == profile_to_be_validated.username && profile.password == profile_to_be_validated.password
-		{
-			break;
-		}
-		return false
-	}
-
-	// check db
 
 	let db: mongodb::sync::Database = mongo::get_database("CRIM");
 	let coll: mongodb::sync::Collection<Document> = db.collection::<Document>("accounts");
@@ -220,10 +202,10 @@ fn select_profile() -> Result<Profile, &'static str>
 	|  
 	/===================================*/
 
-	let mut selected_profile: Profile = Profile::default();
-	while true
+	// loop until a valid profile is selected.
+	loop
 	{
-		utils::clear();
+		//utils::clear();
 		println!("Please select one of your profiles, or type B to go back. : \n \n");
 		let mut profile_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
 		deserialize_profile_data(&mut profile_data);
@@ -260,15 +242,11 @@ fn select_profile() -> Result<Profile, &'static str>
 		};
 		if validate_login_info(&Profile::clone(&potential_selected_profile)) == true
 		{
-			selected_profile = potential_selected_profile;
-			break;
+			return Ok(potential_selected_profile);
 		}
-		else
-		{
-			return Err("Selected profile was invalid. Please try again.")
-		}
+
+		return Err("Selected profile was invalid. Please try again.")
 	}
-	Ok(selected_profile)
 }
 
 fn login(p: Profile) -> bool
