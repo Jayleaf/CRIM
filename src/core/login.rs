@@ -260,7 +260,7 @@ fn select_profile() -> Result<Profile, &'static str>
 fn login(p: Profile) -> bool
 {
     validate_login_info(&p);
-    //
+    // validate token against mongodb, then retrieve user data and pass it to messenger.
     false
 }
 
