@@ -2,7 +2,7 @@ extern crate dotenv;
 use super::mongo;
 use super::utils;
 use colored::Colorize;
-use mongodb::{bson::doc, bson::to_document, bson::Document, sync::Client};
+use mongodb::{bson::doc, bson::to_document, bson::Document, sync::Collection, sync::Database};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use std::collections::HashMap;
@@ -95,7 +95,7 @@ fn serialize_profile_data(container: ProfileContainer)
     }
 }
 
-fn validate_login_info(profile_to_be_validated: &Profile) -> bool
+fn validate_login_info(profile_to_be_validated: &Profile) -> Option<Document>
 {
     /*
 
@@ -104,17 +104,16 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> bool
 
     */
 
-    let db: mongodb::sync::Database = mongo::get_database("CRIM");
-    let coll: mongodb::sync::Collection<Document> = db.collection::<Document>("accounts");
+    let db: Database = mongo::get_database("CRIM");
+    let coll: Collection<Document> = db.collection::<Document>("accounts");
     let query: Option<Document> = coll
         .find_one(doc! { "username": &profile_to_be_validated.username, "password": &profile_to_be_validated.password}, None)
         .unwrap();
-    if !query.is_some()
+    match query
     {
-        return false;
+        Some(_) => query,
+        None => None
     }
-
-    true
 }
 
 /*
@@ -133,8 +132,8 @@ fn register_profile(addl_message: Option<String>)
 
     utils::clear(addl_message);
     
-    let db = mongo::get_database("CRIM");
-    let coll = db.collection::<Document>("accounts");
+    let db: mongodb::sync::Database = mongo::get_database("CRIM");
+    let coll: mongodb::sync::Collection<Document> = db.collection::<Document>("accounts");
     let mut username: String = String::new();
 
 	// grab username input
@@ -159,7 +158,7 @@ fn register_profile(addl_message: Option<String>)
     password = String::from(password.trim());
 
     let new_profile: Profile = Profile { username: String::from(&username), password: String::from(&password) };
-    //utils::clear();
+    utils::clear(None);
 
     // save the data to profiles.json here.
 
@@ -173,25 +172,27 @@ fn register_profile(addl_message: Option<String>)
     */
 
     let doc: Result<Document, mongodb::bson::ser::Error> = to_document(&serde_json::to_value(&new_profile).unwrap());
-    // handle this better
-    let pushed_doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
-    let token: mongodb::bson::Bson = pushed_doc.unwrap().inserted_id;
+    let doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
+    let token: mongodb::bson::Bson = doc.unwrap().inserted_id;
     // write the token to token.json using serde_json
     let token_obj: Token = Token { token: token.to_string() };
     let token_json_str = to_string(&token_obj).unwrap();
     fs::write("src/userdata/token.json", token_json_str).expect("Failed to write token to file. Please ensure you have a token.json file existing.");
     println!("Created profile. Validating...");
-    let validation_status: bool = validate_login_info(&Profile::clone(&new_profile));
-    if validation_status == true
+    let validation_status: Option<Document> = validate_login_info(&Profile::clone(&new_profile));
+    match validation_status
     {
-        println!("Profile Validated. Logging you in...");
-        login(Profile::clone(&new_profile));
-    }
-    else
-    {
-        println!("Profile was not validated. Return to login screen.");
-        login_init();
-    }
+        Some(_) =>
+        {
+            println!("Profile validated. Logging you in...");
+            login(Profile::clone(&new_profile));
+        }
+        None =>
+        {
+            println!("Profile was not validated. Return to login screen.");
+            login_init();
+        }
+    };
 }
 
 fn select_profile() -> Result<Profile, &'static str>
@@ -204,9 +205,10 @@ fn select_profile() -> Result<Profile, &'static str>
     /===================================*/
 
     // loop until a valid profile is selected.
+    let mut msg: Option<String> = None;
     loop
     {
-        utils::clear(None);
+        utils::clear(Option::clone(&msg));
         println!("Please select one of your profiles, or type B to go back. : \n \n");
         let mut profile_data: ProfileContainer = ProfileContainer { profiles: Vec::new() };
         deserialize_profile_data(&mut profile_data);
@@ -241,12 +243,17 @@ fn select_profile() -> Result<Profile, &'static str>
                 _ => Profile { username: String::from(&hash_obj.unwrap().username), password: String::from(&hash_obj.unwrap().password) }
             }
         };
-        if validate_login_info(&Profile::clone(&potential_selected_profile)) == true
+        match validate_login_info(&Profile::clone(&potential_selected_profile))
         {
-            return Ok(potential_selected_profile);
-        }
-
-        return Err("Selected profile was invalid. Please try again.");
+            Some(_) =>
+            {
+                return Ok(potential_selected_profile)
+            },
+            None =>
+            {
+                msg = Some(String::from("Profile was not validated. Please try again."));
+            }
+        };
     }
 }
 
@@ -259,31 +266,47 @@ fn login(p: Profile) -> bool
 
 pub fn login_select_profile()
 {
-    let selected_profile: Profile = {
+    let selected_profile: Option<Profile> = {
         match select_profile()
         {
             Ok(p) =>
             {
                 utils::clear(None);
                 println!("Profile validated. Logging you in...");
-                p
+                Some(p)
             }
             Err(e) =>
             {
                 utils::clear(None);
                 println!("{}", e.red());
-                return login_select_profile();
+                None
             }
-        };
-        Profile::default() // this should NEVER run. only here because rust will babyrage if I don't
+        }
     };
+
+    let token: Option<Document> = validate_login_info(&Profile::clone(&selected_profile.as_ref().unwrap()));
+    match token
+    {
+        Some(token) =>
+        {
+            let token_obj: Token = Token { token: token.get("_id").unwrap().as_object_id().unwrap().to_string() };
+            let token_json_str = to_string(&token_obj).unwrap();
+            fs::write("src/userdata/token.json", token_json_str).expect("Failed to write token to file. Please ensure you have a token.json file existing.");
+        }
+        None =>
+        {
+            // how the fuck is this ever going to run?
+            panic!("{:#?}", token)
+        }
+    };
+
     /*
        Call to login. Now the shitshow begins.
     */
-    let res: bool = login(Profile::clone(&selected_profile)); //
+    let res: bool = login(Profile::clone(&selected_profile.as_ref().unwrap())); //
     if res == true
     {
-        println!("Successfully logged you in as {}. Opening messenger...", &selected_profile.username.red())
+        println!("Successfully logged you in as {}. Opening messenger...", &selected_profile.as_ref().unwrap().username.red())
     }
 }
 
