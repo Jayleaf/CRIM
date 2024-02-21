@@ -1,13 +1,15 @@
 use mongodb::sync::Database;
 use mongodb::{
-    bson::doc, options::{ClientOptions, ServerApi, ServerApiVersion}, sync::Client
+    bson::doc, bson::to_document, bson::Document, options::{ClientOptions, ServerApi, ServerApiVersion}, sync::Client, sync::Collection
 };
 use stopwatch::Stopwatch;
 
+// TODO: Refactor login.rs & messenger.rs to have the mongo shit handled here
+
 fn init_mongo() -> mongodb::error::Result<Client>
 {
-    println!("Connecting to server...");
-    let sw: Stopwatch = Stopwatch::start_new();
+    //println!("Connecting to server...");
+    //let sw: Stopwatch = Stopwatch::start_new();
     let uri = format!(
         "mongodb+srv://{}:{}@cluster-01.myeybv2.mongodb.net/?retryWrites=true&w=majority",
         dotenv::var("DB_USERNAME").unwrap(),
@@ -21,8 +23,13 @@ fn init_mongo() -> mongodb::error::Result<Client>
     let client = Client::with_options(client_options)?;
     // Ping the server to see if you can connect to the cluster
     client.database("admin").run_command(doc! {"ping": 1}, None)?;
-    println!("Connected to server! Connection took {}s.", (sw.elapsed_ms() as f64 / 1000.00).to_string());
+    //println!("Connected to server! Connection took {}s.", (sw.elapsed_ms() as f64 / 1000.00).to_string());
     Ok(client)
 }
 
 pub fn get_database(name: &str) -> Database { init_mongo().unwrap().database(name) }
+pub fn get_collection(name: &str) -> Collection<Document>
+{
+    get_database(dotenv::var("DB_NAME").unwrap().as_str()).collection::<Document>(name)
+    // realistically this should be an option, but .collection doesn't return an option if it found the documents or not.
+}

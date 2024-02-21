@@ -1,4 +1,5 @@
 extern crate dotenv;
+use super::messenger;
 use super::mongo;
 use super::utils;
 use colored::Colorize;
@@ -26,10 +27,10 @@ Structs
 */
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
-struct Profile
+pub struct Profile
 {
-    username: String,
-    password: String
+    pub username: String,
+    pub password: String
 }
 
 impl Default for Profile
@@ -44,9 +45,9 @@ struct ProfileContainer
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-struct Token
+pub struct Token
 {
-    token: String
+    pub token: String
 }
 
 /*
@@ -104,8 +105,7 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> Option<Document>
 
     */
 
-    let db: Database = mongo::get_database("CRIM");
-    let coll: Collection<Document> = db.collection::<Document>("accounts");
+    let coll: Collection<Document> = mongo::get_collection("accounts");
     let query: Option<Document> = coll
         .find_one(doc! { "username": &profile_to_be_validated.username, "password": &profile_to_be_validated.password}, None)
         .unwrap();
@@ -131,26 +131,28 @@ fn register_profile(addl_message: Option<String>)
     /===================================*/
 
     utils::clear(addl_message);
-    
-    let db: mongodb::sync::Database = mongo::get_database("CRIM");
-    let coll: mongodb::sync::Collection<Document> = db.collection::<Document>("accounts");
+
+    let coll: Collection<Document> = mongo::get_collection("accounts");
     let mut username: String = String::new();
 
-	// grab username input
+    // grab username input
     println!("Enter the username for your new profile. This will be your display name. : ");
     io::stdin().read_line(&mut username).expect("Uh oh! Failed to read the line.");
     username = String::from(username.trim());
 
     // check username uniquity
-    let unique_query:Result<Option<Document>, mongodb::error::Error>  = coll.find_one(doc! {"username": &username}, None);
-	match unique_query
-	{
-		Ok(query_option) =>
-		{
-			if query_option.is_some() { register_profile(Some("Username already exists. Please try again.".to_string())); }
-		}
-		Err(_) => panic!("Failed to query database")
-	};
+    let unique_query: Result<Option<Document>, mongodb::error::Error> = coll.find_one(doc! {"username": &username}, None);
+    match unique_query
+    {
+        Ok(query_option) =>
+        {
+            if query_option.is_some()
+            {
+                register_profile(Some("Username already exists. Please try again.".to_string()));
+            }
+        }
+        Err(_) => panic!("Failed to query database")
+    };
 
     let mut password: String = String::new();
     println!("Enter the password for your new profile. : ");
@@ -175,7 +177,7 @@ fn register_profile(addl_message: Option<String>)
     let doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
     let token: mongodb::bson::Bson = doc.unwrap().inserted_id;
     // write the token to token.json using serde_json
-    let token_obj: Token = Token { token: token.to_string() };
+    let token_obj: Token = Token { token: token.as_object_id().unwrap().to_string() };
     let token_json_str = to_string(&token_obj).unwrap();
     fs::write("src/userdata/token.json", token_json_str).expect("Failed to write token to file. Please ensure you have a token.json file existing.");
     println!("Created profile. Validating...");
@@ -185,6 +187,8 @@ fn register_profile(addl_message: Option<String>)
         Some(_) =>
         {
             println!("Profile validated. Logging you in...");
+            let _ = messenger::create_user(Profile::clone(&new_profile));
+            // we don't need the actual messageuser here. Really there's no reason to return it at all. But maybe i'll need it someday.
             login(Profile::clone(&new_profile));
         }
         None =>
@@ -245,10 +249,7 @@ fn select_profile() -> Result<Profile, &'static str>
         };
         match validate_login_info(&Profile::clone(&potential_selected_profile))
         {
-            Some(_) =>
-            {
-                return Ok(potential_selected_profile)
-            },
+            Some(_) => return Ok(potential_selected_profile),
             None =>
             {
                 msg = Some(String::from("Profile was not validated. Please try again."));
@@ -257,11 +258,10 @@ fn select_profile() -> Result<Profile, &'static str>
     }
 }
 
-fn login(p: Profile) -> bool
+fn login(p: Profile)
 {
     validate_login_info(&p);
-    // validate token against mongodb, then retrieve user data and pass it to messenger.
-    false
+    messenger::init(p);
 }
 
 pub fn login_select_profile()
@@ -299,15 +299,7 @@ pub fn login_select_profile()
             panic!("{:#?}", token)
         }
     };
-
-    /*
-       Call to login. Now the shitshow begins.
-    */
-    let res: bool = login(Profile::clone(&selected_profile.as_ref().unwrap())); //
-    if res == true
-    {
-        println!("Successfully logged you in as {}. Opening messenger...", &selected_profile.as_ref().unwrap().username.red())
-    }
+    login(Profile::clone(&selected_profile.as_ref().unwrap())); //
 }
 
 pub fn login_init()
