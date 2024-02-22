@@ -1,7 +1,7 @@
 use super::login;
 use super::mongo;
 use mongodb::bson::Document;
-use mongodb::bson::{doc, oid::ObjectId, to_document};
+use mongodb::bson::{doc, to_document};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::Read;
 use login:: {Profile, Token};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct MessageUser
 {
     token: String,
@@ -17,10 +17,6 @@ pub struct MessageUser
     friends: Vec<String> // this is going to be a vector of usernames
 }
 
-impl Default for MessageUser
-{
-    fn default() -> Self { MessageUser { token: String::new(), username: String::new(), friends: Vec::new() } }
-}
 
 impl MessageUser
 {
@@ -109,7 +105,7 @@ pub fn init(profile: Profile)
     let mut data: String = String::new();
     f.read_to_string(&mut data).unwrap();
     let token: Token = {
-        let t: Result<Token, serde_json::Error> = serde_json::from_str(&data.as_str());
+        let t: Result<Token, serde_json::Error> = serde_json::from_str(data.as_str());
         match t
         {
             Ok(t) => t,

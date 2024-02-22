@@ -3,7 +3,7 @@ use super::messenger;
 use super::mongo;
 use super::utils;
 use colored::Colorize;
-use mongodb::{bson::doc, bson::to_document, bson::Document, sync::Collection, sync::Database};
+use mongodb::{bson::doc, bson::to_document, bson::Document, sync::Collection};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_string;
 use std::collections::HashMap;
@@ -26,17 +26,13 @@ Structs
 
 */
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Profile
 {
     pub username: String,
     pub password: String
 }
 
-impl Default for Profile
-{
-    fn default() -> Profile { Profile { username: String::new(), password: String::new() } }
-}
 
 #[derive(Deserialize, Serialize, Debug)]
 struct ProfileContainer
@@ -67,7 +63,7 @@ fn deserialize_profile_data(holder: &mut ProfileContainer)
     f.read_to_string(&mut data).unwrap();
     // ^^ should not really ever fail. if it does, somebody tampered with profiles.json.
     let profiles: ProfileContainer = {
-        let pc: Result<ProfileContainer, serde_json::Error> = serde_json::from_str(&data.as_str());
+        let pc: Result<ProfileContainer, serde_json::Error> = serde_json::from_str(data.as_str());
         match pc
         {
             Ok(p) => p,
@@ -284,7 +280,7 @@ pub fn login_select_profile()
         }
     };
 
-    let token: Option<Document> = validate_login_info(&Profile::clone(&selected_profile.as_ref().unwrap()));
+    let token: Option<Document> = validate_login_info(&Profile::clone(selected_profile.as_ref().unwrap()));
     match token
     {
         Some(token) =>
@@ -299,7 +295,7 @@ pub fn login_select_profile()
             panic!("{:#?}", token)
         }
     };
-    login(Profile::clone(&selected_profile.as_ref().unwrap())); //
+    login(Profile::clone(selected_profile.as_ref().unwrap())); //
 }
 
 pub fn login_init()
