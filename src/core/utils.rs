@@ -4,15 +4,16 @@ File of public utility functions that may need to be used on many programs. Don'
 
 */
 
+use std::io::{self, Write};
+
 use colored::{Colorize, CustomColor};
 
-pub fn clear(addl_message: Option<String>)
-{
+pub fn clear(addl_message: Option<&str>) {
     /*
        Clears terminal and throws the logo up. Because, you know, it's cool.
        Also lets you print an additional message if you wanted to convey extra info.
     */
-    print!("{}[2J", 27 as char);
+    print!("\x1b[2J");
     println!(
         "{}",
         r"
@@ -26,19 +27,30 @@ pub fn clear(addl_message: Option<String>)
         .custom_color(CustomColor { r: 100, g: 0, b: 0 })
     );
 
-    if addl_message.is_some()
-    {
-        println!("{}", addl_message.unwrap().red());
+    if let Some(message) = addl_message {
+        println!("{}", message.red());
     }
 }
 
-pub fn pad_string(mut string: String, mut length: i32) -> String
-{
-    let len: i32 = string.chars().count().try_into().unwrap();
-    length -= len;
-    for _i in 0..length
-    {
+pub fn pad_string(string: &str, length: usize) -> String {
+    let mut string = string.to_string();
+    let length = length - string.len();
+
+    for _ in 0..length {
         string.push(' ');
     }
+
     string
+}
+
+pub fn grab_input(msg: Option<&str>) -> String {
+    let mut input: String = String::new();
+    if let Some(msg) = msg
+    {
+        println!("{}", msg);
+    }
+    std::io::stdin().read_line(&mut input).expect("Failed to read line.");
+    input = String::from(input.trim());
+    io::stdout().flush().expect("flush error"); // will this ever even error? do i even need to do this? life's biggest questions.
+    input
 }
