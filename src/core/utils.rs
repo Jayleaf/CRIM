@@ -8,6 +8,12 @@ use std::io::{self, Write};
 
 use colored::{Colorize, CustomColor};
 
+pub enum Position {
+    Center,
+    Left,
+    Right
+}
+
 pub fn clear(addl_message: Option<&str>) {
     /*
        Clears terminal and throws the logo up. Because, you know, it's cool.
@@ -34,12 +40,47 @@ pub fn clear(addl_message: Option<&str>) {
 
 pub fn pad_string(string: &str, length: usize) -> String {
     let mut string = string.to_string();
-    let length = length - string.len();
+    let length: isize = length as isize - string.len() as isize;
 
     for _ in 0..length {
         string.push(' ');
     }
 
+    string
+}
+
+pub fn format_string_ui(string: &str, length: usize, pos: &Position, ) -> String {
+    let mut string: String = String::from(string);
+    let string_length: usize = string.len();
+    match pos {
+        Position::Center =>
+        {
+            let rng: isize = (length as isize) - (string_length as isize); // thanks rust for not letting me subtract from a usize!
+            let mut temp_str: String = String::new();
+            let rng: f64 = rng as f64 / 2 as f64;
+            temp_str.push('*');
+            for _ in 0..rng as usize {
+                temp_str.push(' ');
+            }
+            temp_str.push_str(&string);
+            for _ in 0..rng.ceil() as usize {
+                // ceil for odd numbers
+                temp_str.push(' ');
+            }
+            temp_str.push('*');
+            string = temp_str;
+        }
+        Position::Left => {
+            for _ in 0..length {
+                string.push(' ');
+            }
+        }
+        Position::Right => {
+            for _ in 0..length {
+                string.insert(0, ' ');
+            }
+        }
+    }
     string
 }
 
@@ -53,4 +94,26 @@ pub fn grab_input(msg: Option<&str>) -> String {
     input = String::from(input.trim());
     io::stdout().flush().expect("flush error"); // will this ever even error? do i even need to do this? life's biggest questions.
     input
+}
+
+pub fn create_ui(text: Vec<&str>, title: &str, position: Position)
+{
+
+    print!("\x1b[2J");
+    let ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
+    let title: String =
+    {
+        let mut tempstr: String = String::new();
+        for _ in 0..ui_width
+        {
+            tempstr.push('-');
+        }
+        tempstr
+    };
+    println!("{}", format_string_ui(&title, ui_width, &position));
+    for line in text
+    {
+        println!("{}", format_string_ui(line, ui_width, &position));
+    }
+    println!("{}", format_string_ui(&title, ui_width, &position));
 }

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
 use std::io::BufReader;
-use std::io::Read;
+use super::utils;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct MessageUser {
@@ -25,6 +25,32 @@ impl MessageUser {
         }
     }
 }
+
+/*
+|
+|               Front-End Functions
+|
+=====================================================*/
+
+pub fn draw_home(user: &MessageUser)
+{
+    let welcome_message: String = format!("Welcome, {}.", &user.username);
+    let ui: Vec<&str> = vec![
+        welcome_message.as_str(),
+        "",
+        "",
+        "",
+        "Please select an option.",
+        "",
+        "1. Open Messages",
+        "2. Manage Friends",
+        "3. Log Out"
+    ];
+    utils::create_ui(ui, "Home", utils::Position::Center);
+}
+
+
+
 
 pub fn create_user(profile: &login::Profile) -> MessageUser {
     // This function will find a user matching the profile in the accounts database, and create a messageuser database entry from it.
@@ -80,5 +106,5 @@ pub fn init(profile: &Profile) {
     let f: fs::File = fs::File::open("src/userdata/token.json").unwrap();
     let token: Token = serde_json::from_reader(BufReader::new(f)).unwrap_or_default();
     let user: MessageUser = retrieve_user_data(&token.token);
-    println!("Welcome, {}!", user.username);
+    draw_home(&user);
 }
