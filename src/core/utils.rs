@@ -58,6 +58,7 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
 {
     let mut string: String = String::from(string);
     let string_length: usize = string.len();
+    if string_length > length { panic!("UI string longer than UI width.") };
     match pos
     {
         Position::Center =>
