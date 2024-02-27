@@ -8,6 +8,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
 use std::io::BufReader;
+use std::ops::Deref;
+use std::vec;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct MessageUser
@@ -45,11 +47,76 @@ pub fn draw_home(user: &MessageUser)
         "",
         "Please select an option.",
         "",
-        "1. Open Messages",
-        "2. Manage Friends",
-        "3. Log Out",
+        "msg : opens the message panel",
+        "manage : manage your friends",
+        "logout : log out of your account.",
     ];
-    utils::create_ui(ui, "Home", utils::Position::Center);
+    utils::create_ui(ui,  utils::Position::Center);
+    let opt: String = utils::grab_opt(None, vec! ["msg", "manage", "logout"]);
+    match opt.as_str()
+    {
+        "msg" =>
+        {
+            println!("msg")
+            // nothing here
+        }
+        "manage" =>
+        {
+            draw_friend_mgmt(user);
+        }
+        "logout" =>
+        {
+            println!("logout")
+            //logout here
+        }
+        _ =>
+        {
+            // this should never run, because get_opt checks for all cases.
+            panic!("get_opt failed.")
+        }
+    }
+}
+
+pub fn draw_friend_mgmt(user: &MessageUser)
+{
+    let friends: &Vec<String> = &user.friends;
+    let mut ui = vec![
+        "Friends Management",
+        "",
+        "",
+    ];
+    for friend in friends
+    {
+        ui.push(friend.as_str());
+    }
+    ui.push("");
+    ui.push("add <friend> : adds friend by username");
+    ui.push("rm <friend> : removes friend by username");
+    ui.push("back : returns to home page");
+    utils::create_ui(ui, utils::Position::Center);
+    let opt: String = utils::grab_opt(Some("Please input your option."), vec! ["add", "rm", "back"]);
+    match opt.as_str()
+    {
+        "add" =>
+        {
+            let friend: String = utils::grab_str_input(Some("Please input the username of the friend you would like to add."));
+            add_friend(user, &friend);
+        }
+        "rm" =>
+        {
+            let friend: String = utils::grab_str_input(Some("Please input the username of the friend you would like to remove."));
+            remove_friend(user, &friend);
+        }
+        "back" =>
+        {
+            draw_home(user);
+        }
+        _ =>
+        {
+            // this should never run, because get_opt checks for all cases.
+            panic!("get_opt failed.")
+        }
+    }
 }
 
 pub fn create_user(profile: &login::Profile) -> MessageUser
@@ -80,20 +147,26 @@ pub fn create_user(profile: &login::Profile) -> MessageUser
     user
 }
 
+/*
+|
+|       Back-End Functions
+|
+=========================================*/
+
 fn update_user_data(user: &MessageUser) -> Option<MessageUser>
 {
     // This function will update the user's data in the database.
     None
 }
 
-fn retrieve_user_data(token: &str) -> MessageUser
+fn retrieve_user_data(username: &str) -> MessageUser
 {
     // This function will retrieve the user's data from the database and return it as a MessageUser. Ideally, don't do this often, because you don't want to spam the db.
     // The reason this doesn't return an Option is because there there is nothing to retrieve if the token is invalid, and it would break everything going forward.
     let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
     // messageusers and accounts are different, because the account coll holds passwords and shit that we don't need.
     let user: MessageUser = {
-        match user_collection.find_one(doc! { "token": token  }, None)
+        match user_collection.find_one(doc! { "username": &username  }, None)
         {
             Ok(data) => match data
             {
@@ -113,10 +186,18 @@ fn retrieve_user_data(token: &str) -> MessageUser
     user
 }
 
+fn add_friend(user: &MessageUser, friend: &str)
+{
+    // do stuff :)
+}
+
+fn remove_friend(user: &MessageUser, friend: &str)
+{
+   // do stuff :)
+}
+
 pub fn init(profile: &Profile)
 {
-    let f: fs::File = fs::File::open("src/userdata/token.json").unwrap();
-    let token: Token = serde_json::from_reader(BufReader::new(f)).unwrap_or_default();
-    let user: MessageUser = retrieve_user_data(&token.token);
+    let user: MessageUser = retrieve_user_data(&profile.username);
     draw_home(&user);
 }

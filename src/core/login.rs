@@ -1,6 +1,4 @@
 extern crate dotenv;
-use crate::core::utils::grab_input;
-
 use super::messenger;
 use super::mongo;
 use super::utils;
@@ -107,7 +105,7 @@ fn register_profile(addl_message: Option<&str>)
     let coll: mongodb::sync::Collection<bson::Document> = mongo::get_collection("accounts");
 
     // grab username input
-    let username: String = utils::grab_input(Some("Please input a username for your new profile. :"));
+    let username: String = utils::grab_str_input(Some("Please input a username for your new profile. :"));
 
     // check username uniquity
     let unique_query: Result<Option<bson::Document>, mongodb::error::Error> = coll.find_one(bson::doc! {"username": &username}, None);
@@ -122,7 +120,7 @@ fn register_profile(addl_message: Option<&str>)
         {}
     };
 
-    let password: String = utils::grab_input(Some("Please input a password for your new profile. :"));
+    let password: String = utils::grab_str_input(Some("Please input a password for your new profile. :"));
 
     let new_profile: Profile = Profile { username, password };
     utils::clear(None);
@@ -195,16 +193,10 @@ fn select_profile() -> Result<Profile, &'static str>
             })
             .collect::<HashMap<_, _>>();
 
-        let selection: String = utils::grab_input(Some("Please input the number of the profile you'd like to select. :"));
+        let selection: i32 = utils::grab_int_input(Some("Please input the number of the profile you'd like to select. :"), profile_hashmap.len() as i32);
         let potential_selected_profile: Profile = {
             let hash_obj: Option<&Profile> = {
-                // Try to handle all cases of invalid inputs.
-                if selection.as_str() == "B" || selection.as_str() == "b"
-                {
-                    login_init()
-                }
-
-                if let Ok(i) = selection.parse()
+                if let Ok(i) = selection.try_into()
                 {
                     profile_hashmap.get(&i)
                 }
@@ -272,17 +264,23 @@ pub fn login_select_profile()
 pub fn login_init()
 {
     utils::clear(None);
-    println!("Welcome to CRIM. \n");
-    println!("Register New Profile    (1)");
-    println!("Select Existing Profile (2)");
-    println!("Exit                    (3)");
-
-    let selection: String = grab_input(None);
+    let ui = vec!
+    [
+        "Welcome to CRIM.",
+        "",
+        "",
+        "",
+        "register : register an account",
+        "profile : select a profile",
+        "exit : leave CRIM"
+    ];
+    utils::create_ui(ui, utils::Position::Center);
+    let selection: String = utils::grab_opt(None, vec!["register", "profile", "exit"]);
     match selection.as_str()
     {
-        "1" => register_profile(None),
-        "2" => login_select_profile(),
-        "3" => std::process::exit(0),
+        "register" => register_profile(None),
+        "profile" => login_select_profile(),
+        "exit" => std::process::exit(0),
         _ => login_init()
     }
 }

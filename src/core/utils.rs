@@ -97,20 +97,66 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
     string
 }
 
-pub fn grab_input(msg: Option<&str>) -> String
+pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
 {
     let mut input: String = String::new();
     if let Some(msg) = msg
     {
         println!("{}", msg);
     }
-    std::io::stdin().read_line(&mut input).expect("Failed to read line.");
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(&mut input).expect("Failed to read line.");
+    match input.trim().parse()
+    {
+        Ok(num) => {
+            if num <= lim && num > 0
+            {
+                num
+            }
+            else
+            {
+                grab_int_input(msg, lim)
+            }
+        }
+        Err(_) => grab_int_input(msg, lim),
+    }
+}
+
+pub fn grab_str_input(msg: Option<&str>) -> String
+{
+    let mut input: String = String::new();
+    if let Some(msg) = msg
+    {
+        println!("{}", msg);
+    }
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(&mut input).expect("Failed to read line.");
     input = String::from(input.trim());
-    io::stdout().flush().expect("flush error"); // will this ever even error? do i even need to do this? life's biggest questions.
     input
 }
 
-pub fn create_ui(text: Vec<&str>, title: &str, position: Position)
+pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> String
+{
+    loop {
+        let mut input: String = String::new();
+        if let Some(msg) = msg
+        {
+            println!("{}", msg);
+        }
+        std::io::stdin().read_line(&mut input).expect("Failed to read line.");
+        input = String::from(input.trim());
+        for opt in &valid_options
+        {
+            if input == *opt
+            {
+                return input;
+            }
+        }
+        continue;
+    }
+}
+
+pub fn create_ui(text: Vec<&str>, position: Position)
 {
     print!("\x1b[2J");
     let ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
