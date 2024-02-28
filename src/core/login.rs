@@ -103,7 +103,7 @@ fn register_profile(addl_message: Option<&str>)
     if let Some(msg) = addl_message
     {
         // hard-code red because if this function succeeds everything is cleared anyway. only errors need to be shown
-        utils::addl_message( msg, "red");
+        utils::addl_message(msg, "red");
     }
     utils::clear();
 
@@ -186,7 +186,7 @@ fn select_profile() -> Result<Profile, &'static str>
         if let Some(ref msg) = message
         {
             // hard-code red because if this function succeeds everything is cleared anyway. only errors need to be shown
-            utils::addl_message( msg, "red");
+            utils::addl_message(msg, "red");
         }
         println!("Please select one of your profiles, or type B to go back. : \n \n");
         let profile_data: ProfileContainer = deserialize_profile_data();
@@ -205,6 +205,7 @@ fn select_profile() -> Result<Profile, &'static str>
         let selection: i32 = utils::grab_int_input(Some("Please input the number of the profile you'd like to select. :"), profile_hashmap.len() as i32);
         let potential_selected_profile: Profile = {
             let hash_obj: Option<&Profile> = {
+                //todo: you can't go back with B
                 if let Ok(i) = selection.try_into()
                 {
                     profile_hashmap.get(&i)
@@ -234,6 +235,8 @@ fn login(p: &Profile)
 
 pub fn login_select_profile()
 {
+    utils::clear();
+    // todo: make this use the new ui 
     let selected_profile: Option<Profile> = {
         match select_profile()
         {
@@ -273,19 +276,10 @@ pub fn login_select_profile()
 pub fn login_init()
 {
     utils::clear();
-    let ui = vec!
-    [
-        "Welcome to CRIM.",
-        "",
-        "",
-        "",
-        "register : register an account",
-        "profile : select a profile",
-        "exit : leave CRIM"
-    ];
+    let ui = vec!["Welcome to CRIM.", "", "", "", "register : register an account", "profile : select a profile", "exit : leave CRIM"];
     utils::create_ui(ui, utils::Position::Center);
-    let selection: String = utils::grab_opt(None, vec!["register", "profile", "exit"]);
-    match selection.as_str()
+    let selection: (String, String) = utils::grab_opt(None, vec!["register", "profile", "exit"]);
+    match selection.0.as_str()
     {
         "register" => register_profile(None),
         "profile" => login_select_profile(),

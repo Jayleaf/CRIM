@@ -4,8 +4,8 @@ File of public utility functions that may need to be used on many programs. Don'
 
 */
 
-use std::io::{self, Write};
 use colored::{Colorize, CustomColor};
+use std::io::{self, Write};
 
 pub enum Position
 {
@@ -18,7 +18,7 @@ pub enum Position
 
 pub fn addl_message(message: &str, color: &str)
 {
-        println!("{}", message.color("color"));  
+    println!("{}", message.color(color));
 }
 
 pub fn clear()
@@ -44,7 +44,10 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
 {
     let mut string: String = String::from(string);
     let string_length: usize = string.len();
-    if string_length > length { panic!("UI string longer than UI width.") };
+    if string_length > length
+    {
+        panic!("UI string longer than UI width.")
+    };
     match pos
     {
         Position::Center =>
@@ -95,7 +98,8 @@ pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
     io::stdin().read_line(&mut input).expect("Failed to read line.");
     match input.trim().parse()
     {
-        Ok(num) => {
+        Ok(num) =>
+        {
             if num <= lim && num > 0
             {
                 num
@@ -105,7 +109,7 @@ pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
                 grab_int_input(msg, lim)
             }
         }
-        Err(_) => grab_int_input(msg, lim),
+        Err(_) => grab_int_input(msg, lim)
     }
 }
 
@@ -122,21 +126,21 @@ pub fn grab_str_input(msg: Option<&str>) -> String
     input
 }
 
-pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> String
+pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> (String, String)
 {
-    loop {
+    loop
+    {
         let mut input: String = String::new();
         if let Some(msg) = msg
         {
             println!("{}", msg);
         }
         std::io::stdin().read_line(&mut input).expect("Failed to read line.");
-        input = String::from(input.trim());
         for opt in &valid_options
         {
-            if input == *opt
+            if input.starts_with(*opt)
             {
-                return input;
+                return (String::from(*opt), String::from(input.trim_start_matches(*opt).trim()));
             }
         }
         continue;
@@ -145,7 +149,7 @@ pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> String
 
 pub fn create_ui(text: Vec<&str>, position: Position)
 {
-    print!("\x1b[2J");
+
     let ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
     let title: String = {
         let mut tempstr: String = String::new();

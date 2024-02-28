@@ -1,6 +1,7 @@
 use super::login;
 use super::mongo;
 use super::utils;
+use colored::Colorize;
 use login::{Profile, Token};
 use mongodb::bson::Document;
 use mongodb::bson::{doc, to_document};
@@ -40,6 +41,7 @@ impl MessageUser
 
 pub fn draw_home(user: &MessageUser)
 {
+    utils::clear();
     let welcome_message: String = format!("Welcome, {}.", &user.username);
     let ui: Vec<&str> = vec![
         welcome_message.as_str(),
@@ -52,9 +54,9 @@ pub fn draw_home(user: &MessageUser)
         "manage : manage your friends",
         "logout : log out of your account.",
     ];
-    utils::create_ui(ui,  utils::Position::Center);
-    let opt: String = utils::grab_opt(None, vec! ["msg", "manage", "logout"]);
-    match opt.as_str()
+    utils::create_ui(ui, utils::Position::Center);
+    let opt: (String, String) = utils::grab_opt(None, vec!["msg", "manage", "logout"]);
+    match opt.0.as_str()
     {
         "msg" =>
         {
@@ -63,6 +65,7 @@ pub fn draw_home(user: &MessageUser)
         }
         "manage" =>
         {
+            utils::clear();
             draw_friend_mgmt(user);
         }
         "logout" =>
@@ -80,13 +83,9 @@ pub fn draw_home(user: &MessageUser)
 
 pub fn draw_friend_mgmt(user: &MessageUser)
 {
-    
+    let user: MessageUser = retrieve_user_data(&user.username); // the user arg can be trusted to have a proper username but not proper friends.
     let friends: &Vec<String> = &user.friends;
-    let mut ui = vec![
-        "Friends Management",
-        "",
-        "",
-    ];
+    let mut ui = vec!["Friends Management", "", ""];
     for friend in friends
     {
         ui.push(friend.as_str());
@@ -96,29 +95,52 @@ pub fn draw_friend_mgmt(user: &MessageUser)
     ui.push("rm <friend> : removes friend by username");
     ui.push("back : returns to home page");
     utils::create_ui(ui, utils::Position::Center);
-    let opt: String = utils::grab_str_input(Some("Please input your option."));
-    /* 
-    look, i tried hard to not spam else if. but i couldn't make .starts_with work dynamically with a match block.
-    maybe i could use the first x characters if all commands were the same length, but they're not, so we spam else if.
-     */
-    if opt.starts_with("add")
+    let opt: (String, String) = utils::grab_opt(Some("Please input your option."), vec!["add", "rm", "back"]);
+    match opt.0.as_str()
     {
-        let friend: &str = opt.trim_start_matches("add").trim();
-        if add_friend(user, &friend) { utils::clear(); draw_friend_mgmt(user); utils::addl_message("Successfully added friend.", "green") }
-        else { utils::clear(); draw_friend_mgmt(user); utils::addl_message("Friend already added.", "red") }
-    }
-    else if opt.starts_with("rm")
-    {
-        let friend: String = utils::grab_str_input(Some("Please input the username of the friend you would like to remove."));
-        remove_friend(user, &friend);
-    }
-    else if opt.starts_with("back")
-    {
-            draw_home(user);
-    }
-        
-    }
-
+        "add" =>
+        {
+            let friend: &str = opt.1.as_str();
+            println!("{}", friend);
+            if add_friend(&user, &friend)
+            {
+                utils::clear();
+                utils::addl_message("Successfully added friend.", "green");
+                draw_friend_mgmt(&user);
+            }
+            else
+            {
+                utils::clear();
+                utils::addl_message(format!("User {} does not exist, or you already have them added.", friend.blue()).as_str(), "red");
+                draw_friend_mgmt(&user);
+            }
+        }
+        "rm" =>
+        {
+            utils::clear();
+            let friend: &str = opt.1.as_str();
+            if remove_friend(&user, &friend)
+            {
+                utils::addl_message("Successfully removed friend.", "green");
+                draw_friend_mgmt(&user);
+            }
+            else
+            {
+                utils::addl_message(format!("User {} does not exist, or you don't have them added.", friend.blue()).as_str(), "red");
+                draw_friend_mgmt(&user);
+            }
+        }
+        "back" =>
+        {
+            draw_home(&user);
+        }
+        _ =>
+        {
+            utils::clear();
+            draw_friend_mgmt(&user);
+        }
+}
+}
 
 pub fn create_user(profile: &login::Profile) -> MessageUser
 {
@@ -161,7 +183,7 @@ fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
     let update = doc! { "$set": { "username": &user.username, "friends": &user.friends } };
     match user_collection.update_one(filter, update, None)
     {
-        Ok(_) => 
+        Ok(_) =>
         {
             // validate that the data actually was updated on the backend
             let dbdata = retrieve_user_data(&user.username);
@@ -209,26 +231,34 @@ fn add_friend(user: &MessageUser, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
     let mut udata: MessageUser = retrieve_user_data(&user.username);
-    if udata.friends.contains(&friend) { return false }
+    if udata.friends.contains(&friend)
+    {
+        return false;
+    }
     udata.friends.push(friend);
     match update_user_data(&udata)
     {
-        Ok(_) =>
-        {
-            return true
-        }
-        Err(_) =>
-        {
-            return false
-        }
+        Ok(_) => return true,
+        Err(_) => return false
     }
     // todo: blocklist? not necessary right now though.
     // todo: check to make sure friend actually exists, cause a user could just spam with people who don't exist
 }
 
-fn remove_friend(user: &MessageUser, friend: &str)
+fn remove_friend(user: &MessageUser, friend: &str) -> bool
 {
-   // do stuff :)
+    let friend: String = String::from(friend);
+    let mut udata: MessageUser = retrieve_user_data(&user.username);
+    if !udata.friends.contains(&friend)
+    {
+        return false;
+    }
+    udata.friends.retain(|x| x != &friend);
+    match update_user_data(&udata)
+    {
+        Ok(_) => return true,
+        Err(_) => return false
+    }
 }
 
 pub fn init(profile: &Profile)
@@ -236,3 +266,4 @@ pub fn init(profile: &Profile)
     let user: MessageUser = retrieve_user_data(&profile.username);
     draw_home(&user);
 }
+
