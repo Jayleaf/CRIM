@@ -6,6 +6,7 @@ use mongodb::bson::Document;
 use mongodb::bson::{doc, to_document};
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::io::BufReader;
 use std::ops::Deref;
@@ -79,6 +80,7 @@ pub fn draw_home(user: &MessageUser)
 
 pub fn draw_friend_mgmt(user: &MessageUser)
 {
+    
     let friends: &Vec<String> = &user.friends;
     let mut ui = vec![
         "Friends Management",
@@ -94,30 +96,29 @@ pub fn draw_friend_mgmt(user: &MessageUser)
     ui.push("rm <friend> : removes friend by username");
     ui.push("back : returns to home page");
     utils::create_ui(ui, utils::Position::Center);
-    let opt: String = utils::grab_opt(Some("Please input your option."), vec! ["add", "rm", "back"]);
-    match opt.as_str()
+    let opt: String = utils::grab_str_input(Some("Please input your option."));
+    /* 
+    look, i tried hard to not spam else if. but i couldn't make .starts_with work dynamically with a match block.
+    maybe i could use the first x characters if all commands were the same length, but they're not, so we spam else if.
+     */
+    if opt.starts_with("add")
     {
-        "add" =>
-        {
-            let friend: String = utils::grab_str_input(Some("Please input the username of the friend you would like to add."));
-            add_friend(user, &friend);
-        }
-        "rm" =>
-        {
-            let friend: String = utils::grab_str_input(Some("Please input the username of the friend you would like to remove."));
-            remove_friend(user, &friend);
-        }
-        "back" =>
-        {
-            draw_home(user);
-        }
-        _ =>
-        {
-            // this should never run, because get_opt checks for all cases.
-            panic!("get_opt failed.")
-        }
+        let friend: &str = opt.trim_start_matches("add").trim();
+        if add_friend(user, &friend) { utils::clear(); draw_friend_mgmt(user); utils::addl_message("Successfully added friend.", "green") }
+        else { utils::clear(); draw_friend_mgmt(user); utils::addl_message("Friend already added.", "red") }
     }
-}
+    else if opt.starts_with("rm")
+    {
+        let friend: String = utils::grab_str_input(Some("Please input the username of the friend you would like to remove."));
+        remove_friend(user, &friend);
+    }
+    else if opt.starts_with("back")
+    {
+            draw_home(user);
+    }
+        
+    }
+
 
 pub fn create_user(profile: &login::Profile) -> MessageUser
 {
@@ -153,16 +154,34 @@ pub fn create_user(profile: &login::Profile) -> MessageUser
 |
 =========================================*/
 
-fn update_user_data(user: &MessageUser) -> Option<MessageUser>
+fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
 {
-    // This function will update the user's data in the database.
-    None
+    let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
+    let filter = doc! { "username": &user.username };
+    let update = doc! { "$set": { "username": &user.username, "friends": &user.friends } };
+    match user_collection.update_one(filter, update, None)
+    {
+        Ok(_) => 
+        {
+            // validate that the data actually was updated on the backend
+            let dbdata = retrieve_user_data(&user.username);
+            if dbdata.username == user.username && dbdata.friends == user.friends
+            {
+                Ok(dbdata)
+            }
+            else
+            {
+                Err(())
+            }
+        }
+        Err(_) => Err(())
+    }
 }
 
 fn retrieve_user_data(username: &str) -> MessageUser
 {
     // This function will retrieve the user's data from the database and return it as a MessageUser. Ideally, don't do this often, because you don't want to spam the db.
-    // The reason this doesn't return an Option is because there there is nothing to retrieve if the token is invalid, and it would break everything going forward.
+    // The reason this doesn't return an Option or Result is because there there is nothing to retrieve if the token is invalid, and it would break everything going forward.
     let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
     // messageusers and accounts are different, because the account coll holds passwords and shit that we don't need.
     let user: MessageUser = {
@@ -186,9 +205,25 @@ fn retrieve_user_data(username: &str) -> MessageUser
     user
 }
 
-fn add_friend(user: &MessageUser, friend: &str)
+fn add_friend(user: &MessageUser, friend: &str) -> bool
 {
-    // do stuff :)
+    let friend: String = String::from(friend);
+    let mut udata: MessageUser = retrieve_user_data(&user.username);
+    if udata.friends.contains(&friend) { return false }
+    udata.friends.push(friend);
+    match update_user_data(&udata)
+    {
+        Ok(_) =>
+        {
+            return true
+        }
+        Err(_) =>
+        {
+            return false
+        }
+    }
+    // todo: blocklist? not necessary right now though.
+    // todo: check to make sure friend actually exists, cause a user could just spam with people who don't exist
 }
 
 fn remove_friend(user: &MessageUser, friend: &str)

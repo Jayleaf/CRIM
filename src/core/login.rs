@@ -100,7 +100,12 @@ fn register_profile(addl_message: Option<&str>)
     |  If the username is not unique, the function will return to the start of the function.
     /===================================*/
 
-    utils::clear(addl_message);
+    if let Some(msg) = addl_message
+    {
+        // hard-code red because if this function succeeds everything is cleared anyway. only errors need to be shown
+        utils::addl_message( msg, "red");
+    }
+    utils::clear();
 
     let coll: mongodb::sync::Collection<bson::Document> = mongo::get_collection("accounts");
 
@@ -123,7 +128,7 @@ fn register_profile(addl_message: Option<&str>)
     let password: String = utils::grab_str_input(Some("Please input a password for your new profile. :"));
 
     let new_profile: Profile = Profile { username, password };
-    utils::clear(None);
+    utils::clear();
 
     // save the data to profiles.json here.
 
@@ -175,10 +180,14 @@ fn select_profile() -> Result<Profile, &'static str>
     /===================================*/
 
     // loop until a valid profile is selected.
-    let mut msg: Option<String> = None;
+    let mut message: Option<String> = None;
     loop
     {
-        utils::clear(msg.as_deref());
+        if let Some(ref msg) = message
+        {
+            // hard-code red because if this function succeeds everything is cleared anyway. only errors need to be shown
+            utils::addl_message( msg, "red");
+        }
         println!("Please select one of your profiles, or type B to go back. : \n \n");
         let profile_data: ProfileContainer = deserialize_profile_data();
 
@@ -209,7 +218,7 @@ fn select_profile() -> Result<Profile, &'static str>
             hash_obj.cloned().unwrap_or_default()
         };
 
-        msg = match validate_login_info(&potential_selected_profile)
+        message = match validate_login_info(&potential_selected_profile)
         {
             Some(_) => return Ok(potential_selected_profile),
             None => Some(String::from("Profile was not validated. Please try again."))
@@ -230,13 +239,13 @@ pub fn login_select_profile()
         {
             Ok(p) =>
             {
-                utils::clear(None);
+                utils::clear();
                 println!("Profile validated. Logging you in...");
                 Some(p)
             }
             Err(e) =>
             {
-                utils::clear(None);
+                utils::clear();
                 println!("{}", e.red());
                 None
             }
@@ -263,7 +272,7 @@ pub fn login_select_profile()
 
 pub fn login_init()
 {
-    utils::clear(None);
+    utils::clear();
     let ui = vec!
     [
         "Welcome to CRIM.",

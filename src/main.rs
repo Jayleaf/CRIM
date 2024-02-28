@@ -2,6 +2,6 @@ mod core;
 
 fn main()
 {
-    core::utils::clear(None);
+    core::utils::clear();
     core::login::login_init();
 }
