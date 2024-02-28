@@ -4,7 +4,6 @@ use mongodb::{
 };
 use stopwatch::Stopwatch;
 
-// TODO: Refactor login.rs & messenger.rs to have the mongo shit handled here
 
 fn init_mongo() -> mongodb::error::Result<Client>
 {

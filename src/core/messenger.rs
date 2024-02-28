@@ -83,7 +83,7 @@ pub fn draw_home(user: &MessageUser)
 
 pub fn draw_friend_mgmt(user: &MessageUser)
 {
-    let user: MessageUser = retrieve_user_data(&user.username); // the user arg can be trusted to have a proper username but not proper friends.
+    let user: MessageUser = retrieve_user_data(&user.username).unwrap(); // the user arg can be trusted to have a proper username but not proper friends.
     let friends: &Vec<String> = &user.friends;
     let mut ui = vec!["Friends Management", "", ""];
     for friend in friends
@@ -186,7 +186,7 @@ fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
         Ok(_) =>
         {
             // validate that the data actually was updated on the backend
-            let dbdata = retrieve_user_data(&user.username);
+            let dbdata = retrieve_user_data(&user.username).unwrap();
             if dbdata.username == user.username && dbdata.friends == user.friends
             {
                 Ok(dbdata)
@@ -200,37 +200,34 @@ fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
     }
 }
 
-fn retrieve_user_data(username: &str) -> MessageUser
+fn retrieve_user_data(username: &str) -> Option<MessageUser>
 {
     // This function will retrieve the user's data from the database and return it as a MessageUser. Ideally, don't do this often, because you don't want to spam the db.
-    // The reason this doesn't return an Option or Result is because there there is nothing to retrieve if the token is invalid, and it would break everything going forward.
     let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
     // messageusers and accounts are different, because the account coll holds passwords and shit that we don't need.
-    let user: MessageUser = {
         match user_collection.find_one(doc! { "username": &username  }, None)
         {
             Ok(data) => match data
             {
-                Some(d) => MessageUser::from_document(d),
+                Some(d) => return Some(MessageUser::from_document(d)),
                 None =>
                 {
-                    panic!("Tried to retrieve user data with an invalid token.")
+                    return None
                 }
             },
             Err(_) =>
             {
-                panic!("Tried to retrieve user data with an invalid token.")
+                return None
             }
-        }
+        
     };
-
-    user
 }
 
 fn add_friend(user: &MessageUser, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
-    let mut udata: MessageUser = retrieve_user_data(&user.username);
+    let mut udata: MessageUser = retrieve_user_data(&user.username).unwrap(); //should never fail
+    if retrieve_user_data(&friend).is_none() { return false };
     if udata.friends.contains(&friend)
     {
         return false;
@@ -241,14 +238,14 @@ fn add_friend(user: &MessageUser, friend: &str) -> bool
         Ok(_) => return true,
         Err(_) => return false
     }
-    // todo: blocklist? not necessary right now though.
-    // todo: check to make sure friend actually exists, cause a user could just spam with people who don't exist
+    // TODO: blocklist? not necessary right now though.
 }
 
 fn remove_friend(user: &MessageUser, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
-    let mut udata: MessageUser = retrieve_user_data(&user.username);
+    let mut udata: MessageUser = retrieve_user_data(&user.username).unwrap();
+    // shouldn't be any need to check if the friend exists, because that should have been checked when the friend was added.
     if !udata.friends.contains(&friend)
     {
         return false;
@@ -263,7 +260,14 @@ fn remove_friend(user: &MessageUser, friend: &str) -> bool
 
 pub fn init(profile: &Profile)
 {
-    let user: MessageUser = retrieve_user_data(&profile.username);
-    draw_home(&user);
+    if let Some(user) = retrieve_user_data(&profile.username)
+    {
+        draw_home(&user);
+    }
+    else
+    {
+        // ???? we checked validity a hundred million times, so this should never run; just an extra measure i guess
+        panic!("Opened the messenger with an invalid profile... How?")
+    }
 }
 

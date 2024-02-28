@@ -205,9 +205,9 @@ fn select_profile() -> Result<Profile, &'static str>
         let selection: i32 = utils::grab_int_input(Some("Please input the number of the profile you'd like to select. :"), profile_hashmap.len() as i32);
         let potential_selected_profile: Profile = {
             let hash_obj: Option<&Profile> = {
-                //todo: you can't go back with B
                 if let Ok(i) = selection.try_into()
                 {
+                    if i == 0 { login_init() }
                     profile_hashmap.get(&i)
                 }
                 else
@@ -236,7 +236,7 @@ fn login(p: &Profile)
 pub fn login_select_profile()
 {
     utils::clear();
-    // todo: make this use the new ui 
+    // TODO: make this use the new ui 
     let selected_profile: Option<Profile> = {
         match select_profile()
         {

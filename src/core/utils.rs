@@ -55,7 +55,8 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
             let rng: isize = (length as isize) - (string_length as isize); // thanks rust for not letting me subtract from a usize!
             let mut temp_str: String = String::new();
             let rng: f64 = rng as f64 / 2 as f64;
-            temp_str.push('*');
+            let wall_char = dotenv::var("UI_WALL_CHAR").unwrap().parse::<char>().unwrap();
+            temp_str.push(wall_char);
             for _ in 0..rng as usize
             {
                 temp_str.push(' ');
@@ -66,7 +67,7 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
                 // ceil for odd numbers
                 temp_str.push(' ');
             }
-            temp_str.push('*');
+            temp_str.push(wall_char);
             string = temp_str;
         }
         Position::Left =>
@@ -109,7 +110,18 @@ pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
                 grab_int_input(msg, lim)
             }
         }
-        Err(_) => grab_int_input(msg, lim)
+        Err(_) => 
+        {
+            if input.trim().to_lowercase() == "b"
+            {
+                0
+            }
+            else
+            {
+                grab_int_input(msg, lim)
+            }
+            
+        }
     }
 }
 
@@ -149,13 +161,13 @@ pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> (String, String)
 
 pub fn create_ui(text: Vec<&str>, position: Position)
 {
-
+    let floor_char = dotenv::var("UI_FLOOR_CHAR").unwrap().parse::<char>().unwrap();
     let ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
     let title: String = {
         let mut tempstr: String = String::new();
         for _ in 0..ui_width
         {
-            tempstr.push('-');
+            tempstr.push(floor_char);
         }
         tempstr
     };
