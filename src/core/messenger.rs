@@ -9,7 +9,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
+use std::fs::File;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::ops::Deref;
 use std::vec;
 
@@ -69,9 +71,11 @@ pub fn draw_home(user: &MessageUser)
             draw_friend_mgmt(user);
         }
         "logout" =>
-        {
-            println!("logout")
-            //logout here
+        { 
+            let token = login::Token::default();
+            let f: File = File::create("src/userdata/token.json").expect("Failed to write profile data to file.");
+            serde_json::to_writer(BufWriter::new(f), &token).expect("Token serialization failed. Ensure token.json exists.");
+            login::login_init();
         }
         _ =>
         {
