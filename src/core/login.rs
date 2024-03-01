@@ -8,6 +8,9 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
+use argon2::Argon2;
+use getrandom::getrandom;
+use base64::{engine::general_purpose, Engine as _};
 
 /*
 
@@ -27,7 +30,8 @@ Structs
 pub struct Profile
 {
     pub username: String,
-    pub password: String
+    pub salted_pass: String,
+    pub salt: Vec<u8>
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -77,12 +81,12 @@ fn validate_login_info(profile_to_be_validated: &Profile) -> Option<bson::Docume
     /*
 
        Validates login information against the database.
-       Maybe also instead of storing profile username and passwords, you could only store the username since they must be unique; passwords laying around is a risk.
+       I don't think I need to check the salt. That should be left out of code as much as possible for security sake.
 
     */
 
     let coll: mongodb::sync::Collection<bson::Document> = mongo::get_collection("accounts");
-    coll.find_one(bson::doc! { "username": &profile_to_be_validated.username, "password": &profile_to_be_validated.password }, None)
+    coll.find_one(bson::doc! { "username": &profile_to_be_validated.username, "salted_pass": &profile_to_be_validated.salted_pass }, None)
         .unwrap()
 }
 
@@ -127,22 +131,24 @@ fn register_profile(addl_message: Option<&str>)
 
     let password: String = utils::grab_str_input(Some("Please input a password for your new profile. :"));
 
-    let new_profile: Profile = Profile { username, password };
-    utils::clear();
+    // crypto
 
-    // save the data to profiles.json here.
+     let mut salt: [u8; 256] = [0; 256];
+     getrandom(&mut salt).expect("Failed to generate random salt.");
+     let mut output: [u8; 256] = [0u8; 256];
+     Argon2::default().hash_password_into(&password.into_bytes(), &salt, &mut output).expect("failed to hash password");
+     let base64_encoded = general_purpose::STANDARD.encode(&output);
+     let new_profile: Profile = Profile { username: username, salted_pass: base64_encoded, salt: salt.to_vec()};
+     //todo: make sure this works
+     utils::clear();
 
-    let mut deserialized_data: ProfileContainer = deserialize_profile_data();
-    deserialized_data.profiles.push(new_profile.clone());
-    serialize_profile_data(&deserialized_data);
+     /*
+         mang- i mean mongo time!
+     */
 
-    /*
-       mang- i mean mongo time!
-    */
-
-    let doc: Result<bson::Document, bson::ser::Error> = bson::to_document(&serde_json::to_value(&new_profile).unwrap());
-    let doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
-    let token: bson::Bson = doc.unwrap().inserted_id;
+     let doc: Result<bson::Document, bson::ser::Error> = bson::to_document(&serde_json::to_value(&new_profile).unwrap());
+     let doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
+     let token: bson::Bson = doc.unwrap().inserted_id;
     // write the token to token.json using serde_json
     let token_obj: Token = Token { token: token.as_object_id().unwrap().to_string() };
 
@@ -225,6 +231,13 @@ fn select_profile() -> Result<Profile, &'static str>
             None => Some(String::from("Profile was not validated. Please try again."))
         };
     }
+}
+
+fn login_upass()
+{
+    let username = utils::grab_str_input(Some("Type your username."));
+    let password = utils::grab_str_input(Some("Type your password."));
+
 }
 
 fn login(p: &Profile)

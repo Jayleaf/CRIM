@@ -153,7 +153,7 @@ pub fn create_user(profile: &login::Profile) -> MessageUser
     let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
 
     let user: MessageUser = {
-        match account_collection.find_one(doc! { "username": &profile.username, "password": &profile.password }, None)
+        match account_collection.find_one(doc! { "username": &profile.username }, None)
         {
             Ok(Some(unwrapped_collection)) =>
             {
