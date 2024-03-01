@@ -176,7 +176,7 @@ fn register_profile(addl_message: Option<&str>)
     };
 }
 
-fn select_profile() -> Result<Profile, &'static str>
+/*fn select_profile() -> Result<Profile, &'static str>
 {
     /*
     |
@@ -231,7 +231,7 @@ fn select_profile() -> Result<Profile, &'static str>
             None => Some(String::from("Profile was not validated. Please try again."))
         };
     }
-}
+} */
 
 fn login_upass()
 {
@@ -246,7 +246,7 @@ fn login(p: &Profile)
     messenger::init(p);
 }
 
-pub fn login_select_profile()
+/*pub fn login_select_profile()
 {
     utils::clear();
     // TODO: make this use the new ui 
@@ -284,18 +284,18 @@ pub fn login_select_profile()
         }
     };
     login(selected_profile.as_ref().unwrap()); //
-}
+} */
 
 pub fn login_init()
 {
     utils::clear();
-    let ui = vec!["Welcome to CRIM.", "", "", "", "register : register an account", "profile : select a profile", "exit : leave CRIM"];
+    let ui = vec!["Welcome to CRIM.", "", "", "", "register : register an account", "login : login to an existing account", "exit : leave CRIM"];
     utils::create_ui(ui, utils::Position::Center);
-    let selection: (String, String) = utils::grab_opt(None, vec!["register", "profile", "exit"]);
+    let selection: (String, String) = utils::grab_opt(None, vec!["login", "profile", "exit"]);
     match selection.0.as_str()
     {
         "register" => register_profile(None),
-        "profile" => login_select_profile(),
+        // will become login.
         "exit" => std::process::exit(0),
         _ => login_init()
     }
