@@ -9,7 +9,6 @@ use mongodb::bson;
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufWriter;
-use delay::Delay;
 
 /*
 
@@ -156,6 +155,7 @@ fn register_profile(addl_message: Option<&str>)
 fn login_upass()
 {
     let mut msg: &str = "";
+    //TODO: let user type something to exit this and return to login screen
     loop
     {
         utils::clear();

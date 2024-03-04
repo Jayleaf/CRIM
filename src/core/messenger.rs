@@ -23,6 +23,18 @@ pub struct MessageUser
     friends: Vec<String> // this is going to be a vector of usernames
 }
 
+struct Message
+{
+    message: String,
+    time: String
+}
+
+struct Conversation
+{
+    users: Vec<String>,
+    messages: Vec<Message>
+}
+
 impl MessageUser
 {
     fn from_document(doc: Document) -> Self
@@ -62,8 +74,7 @@ pub fn draw_home(user: &MessageUser)
     {
         "msg" =>
         {
-            println!("msg")
-            // nothing here
+            draw_msg(user);
         }
         "manage" =>
         {
@@ -142,6 +153,74 @@ pub fn draw_friend_mgmt(user: &MessageUser)
         {
             utils::clear();
             draw_friend_mgmt(&user);
+        }
+    }
+}
+
+fn draw_msg(user: &MessageUser)
+{
+    //TODO: exit option
+    let user: MessageUser = retrieve_user_data(&user.username).unwrap();
+    let friends: &Vec<String> = &user.friends;
+    let ui =vec!
+    [
+        "Message Panel",
+        "",
+        "",
+        "",
+        "new <friend> : start a new single conversation with a friend.",
+        "new --multi <friend, friend> : start a new multi-person conversation.",
+        "open : view open conversations you are a participant in."
+    ];
+    utils::create_ui(ui, utils::Position::Center);
+    // flags aren't dynamic. I could fix that at some point but it's unnecessary right now.
+    let opt: (String, String) = utils::grab_opt(None, vec!["new", "new --multi", "open"]);
+    match opt.0.as_str()
+    {
+        "new" =>
+        {
+            let friend: &str = opt.1.as_str();
+            if friends.contains(&friend.to_string())
+            {
+                // open a new conversation with the friend
+                // this is a placeholder for now
+                println!("Opening a new conversation with {}", friend.blue());
+            }
+            else
+            {
+                utils::clear();
+                utils::addl_message(format!("You don't have {} added as a friend.", friend.blue()).as_str(), "red");
+                draw_msg(&user);
+            }
+        }
+        "new --multi" =>
+        {
+            let user_friends = user.friends.clone();
+            let listed_friends: Vec<&str> = opt.1.split(", ").collect();
+            for friend in friends
+            {
+                if !user_friends.contains(&friend.to_string())
+                {
+                    utils::clear();
+                    utils::addl_message(format!("You don't have {} added as a friend.", friend.blue()).as_str(), "red");
+                    draw_msg(&user);
+                    return;
+                }
+            }
+            // open a new conversation with the friends
+            // this is a placeholder for now
+            println!("Opening a new conversation with {}", friends.join(", "));
+        }
+        "open" =>
+        {
+            // open the conversation panel
+            // this is a placeholder for now
+            println!("Opening the conversation panel.");
+        }
+        _ =>
+        {
+            utils::clear();
+            draw_msg(&user);
         }
     }
 }

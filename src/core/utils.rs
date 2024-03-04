@@ -42,10 +42,6 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
 {
     let mut string: String = String::from(string);
     let string_length: usize = string.len();
-    if string_length > length
-    {
-        panic!("UI string longer than UI width.")
-    };
     match pos
     {
         Position::Center =>
@@ -135,8 +131,10 @@ pub fn grab_str_input(msg: Option<&str>) -> String
     input
 }
 
-pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> (String, String)
+pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, String)
 {
+    valid_options.sort_by(|a, b| a.len().cmp(&b.len()));
+    // sort this by length so that things with flags get read first.
     loop
     {
         let mut input: String = String::new();
@@ -159,7 +157,24 @@ pub fn grab_opt(msg: Option<&str>, valid_options: Vec<&str>) -> (String, String)
 pub fn create_ui(text: Vec<&str>, position: Position)
 {
     let floor_char = dotenv::var("UI_FLOOR_CHAR").unwrap().parse::<char>().unwrap();
-    let ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
+    let mut ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
+    let mut ordered_text = Vec::clone(&text);
+    // TODO: there's a way cleaner way to do this by making ui_width a function but i'm crunched on time.
+    ordered_text.sort_by(|a, b| a.len().cmp(&b.len()));
+    ordered_text.reverse();
+    // this is absolutely disgusting. why can't sort_by just return something?
+    if ordered_text[0].len() > ui_width
+    {
+        if dotenv::var("UI_DYNAMIC").unwrap() == "true"
+        {
+            // if the ui is dynamic, then we can just set the ui width to the length of the longest string, plus something else to make it look better.
+            ui_width = ordered_text[0].len() + 6;
+        }
+        else
+        {
+            panic!("Given UI string length supersedes that of the set UI width. Either increase the UI width or turn on dynamic UI.");
+        }
+    }
     let title: String = {
         let mut tempstr: String = String::new();
         for _ in 0..ui_width
