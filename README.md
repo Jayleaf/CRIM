@@ -6,7 +6,7 @@ CRIM uses mongoDB to store data externally, but can likely be refactored to use 
 
 ## Encryption
 ### Login
-Passwords are encrypted with the typical salting method; A salt is generated, added to the password, encrypted using Argon2, encoded with base64, and then sent to an external mongoDB database:
+Passwords are encrypted with the typical salting method; A salt is generated, added to the password, hashed using Argon2, encoded with base64, and then sent to an external mongoDB database:
 > From [`login.rs`](src/core/login.rs)
 ```rust
 // get user input
