@@ -21,5 +21,5 @@ let new_profile: Profile = Profile { username: username, hash: base64_encoded, s
 // database actions below
 ```
 
-# E2EE with Messaging
+### E2EE with Messaging
 Wip :)
