@@ -14,8 +14,6 @@ pub enum Position
     Right
 }
 
-// does this really need to be a struct? i need a single key value pair and a hashmap isn't necessary.
-
 pub fn addl_message(message: &str, color: &str)
 {
     println!("{}", message.color(color));
@@ -110,7 +108,7 @@ pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
                 grab_int_input(msg, lim)
             }
         }
-        Err(_) => 
+        Err(_) =>
         {
             if input.trim().to_lowercase() == "b"
             {
@@ -120,7 +118,6 @@ pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
             {
                 grab_int_input(msg, lim)
             }
-            
         }
     }
 }

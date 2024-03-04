@@ -71,7 +71,7 @@ pub fn draw_home(user: &MessageUser)
             draw_friend_mgmt(user);
         }
         "logout" =>
-        { 
+        {
             let token = login::Token::default();
             let f: File = File::create("src/userdata/token.json").expect("Failed to write profile data to file.");
             serde_json::to_writer(BufWriter::new(f), &token).expect("Token serialization failed. Ensure token.json exists.");
@@ -143,7 +143,7 @@ pub fn draw_friend_mgmt(user: &MessageUser)
             utils::clear();
             draw_friend_mgmt(&user);
         }
-}
+    }
 }
 
 pub fn create_user(profile: &login::Profile) -> MessageUser
@@ -209,21 +209,14 @@ fn retrieve_user_data(username: &str) -> Option<MessageUser>
     // This function will retrieve the user's data from the database and return it as a MessageUser. Ideally, don't do this often, because you don't want to spam the db.
     let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
     // messageusers and accounts are different, because the account coll holds passwords and shit that we don't need.
-        match user_collection.find_one(doc! { "username": &username  }, None)
+    match user_collection.find_one(doc! { "username": &username  }, None)
+    {
+        Ok(data) => match data
         {
-            Ok(data) => match data
-            {
-                Some(d) => return Some(MessageUser::from_document(d)),
-                None =>
-                {
-                    return None
-                }
-            },
-            Err(_) =>
-            {
-                return None
-            }
-        
+            Some(d) => return Some(MessageUser::from_document(d)),
+            None => return None
+        },
+        Err(_) => return None
     };
 }
 
@@ -231,7 +224,10 @@ fn add_friend(user: &MessageUser, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
     let mut udata: MessageUser = retrieve_user_data(&user.username).unwrap(); //should never fail
-    if retrieve_user_data(&friend).is_none() { return false };
+    if retrieve_user_data(&friend).is_none()
+    {
+        return false;
+    };
     if udata.friends.contains(&friend)
     {
         return false;
@@ -274,4 +270,3 @@ pub fn init(profile: &Profile)
         panic!("Opened the messenger with an invalid profile... How?")
     }
 }
-

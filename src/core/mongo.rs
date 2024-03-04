@@ -4,7 +4,6 @@ use mongodb::{
 };
 use stopwatch::Stopwatch;
 
-
 fn init_mongo() -> mongodb::error::Result<Client>
 {
     //println!("Connecting to server...");
