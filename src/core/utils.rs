@@ -4,7 +4,7 @@ File of public utility functions that may need to be used on many programs. Don'
 
 */
 
-use colored::{Colorize, CustomColor};
+use colored::Colorize;
 use std::io::{self, Write};
 
 pub enum Position
@@ -23,19 +23,6 @@ pub fn clear()
 {
     // clear console without having to type out that nasty stuff. Used to print a logo before UI change.
     print!("\x1b[2J");
-}
-
-pub fn pad_string(string: &str, length: usize) -> String
-{
-    let mut string = string.to_string();
-    let length: isize = length as isize - string.len() as isize;
-
-    for _ in 0..length
-    {
-        string.push(' ');
-    }
-
-    string
 }
 
 pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
@@ -82,42 +69,6 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
     string
 }
 
-pub fn grab_int_input(msg: Option<&str>, lim: i32) -> i32
-{
-    let mut input: String = String::new();
-    if let Some(msg) = msg
-    {
-        println!("{}", msg);
-    }
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input).expect("Failed to read line.");
-    match input.trim().parse()
-    {
-        Ok(num) =>
-        {
-            if num <= lim && num > 0
-            {
-                num
-            }
-            else
-            {
-                grab_int_input(msg, lim)
-            }
-        }
-        Err(_) =>
-        {
-            if input.trim().to_lowercase() == "b"
-            {
-                0
-            }
-            else
-            {
-                grab_int_input(msg, lim)
-            }
-        }
-    }
-}
-
 pub fn grab_str_input(msg: Option<&str>) -> String
 {
     let mut input: String = String::new();
@@ -157,24 +108,21 @@ pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, Str
 pub fn create_ui(text: Vec<&str>, position: Position)
 {
     let floor_char = dotenv::var("UI_FLOOR_CHAR").unwrap().parse::<char>().unwrap();
-    let mut ui_width: usize = dotenv::var("UI_WIDTH").unwrap().parse::<usize>().unwrap();
-    let mut ordered_text = Vec::clone(&text);
-    // TODO: there's a way cleaner way to do this by making ui_width a function but i'm crunched on time.
-    ordered_text.sort_by(|a, b| a.len().cmp(&b.len()));
-    ordered_text.reverse();
-    // this is absolutely disgusting. why can't sort_by just return something?
-    if ordered_text[0].len() > ui_width
+    let ui_width: usize = 
     {
+        let mut t: Vec<&str> = Vec::clone(&text);
+        t.sort_by(|a, b| a.len().cmp(&b.len()));
+        t.reverse();
         if dotenv::var("UI_DYNAMIC").unwrap() == "true"
         {
-            // if the ui is dynamic, then we can just set the ui width to the length of the longest string, plus something else to make it look better.
-            ui_width = ordered_text[0].len() + 6;
+            // if ui is dynamic, set it to the width of the longest string and add some number for cleanliness.
+            t[0].len() + 6
         }
         else
         {
             panic!("Given UI string length supersedes that of the set UI width. Either increase the UI width or turn on dynamic UI.");
         }
-    }
+    };
     let title: String = {
         let mut tempstr: String = String::new();
         for _ in 0..ui_width

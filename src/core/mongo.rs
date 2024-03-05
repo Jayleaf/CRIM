@@ -2,7 +2,6 @@ use mongodb::sync::Database;
 use mongodb::{
     bson::doc, bson::Document, options::{ClientOptions, ServerApi, ServerApiVersion}, sync::Client, sync::Collection
 };
-use stopwatch::Stopwatch;
 
 fn init_mongo() -> mongodb::error::Result<Client>
 {

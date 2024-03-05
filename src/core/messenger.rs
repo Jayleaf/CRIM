@@ -2,18 +2,15 @@ use super::login;
 use super::mongo;
 use super::utils;
 use colored::Colorize;
-use login::{Profile, Token};
+use login::Profile;
 use mongodb::bson::Document;
 use mongodb::bson::{doc, to_document};
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::fs;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::BufWriter;
-use std::ops::Deref;
 use std::vec;
+use openssl::pkey::PKey;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct MessageUser
@@ -209,7 +206,7 @@ fn draw_msg(user: &MessageUser)
             }
             // open a new conversation with the friends
             // this is a placeholder for now
-            println!("Opening a new conversation with {}", friends.join(", "));
+            println!("Opening a new conversation with {}", listed_friends.join(", "));
         }
         "open" =>
         {

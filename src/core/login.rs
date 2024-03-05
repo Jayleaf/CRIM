@@ -9,6 +9,7 @@ use mongodb::bson;
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufWriter;
+use openssl::{pkey::PKey, rsa::Rsa};
 
 /*
 
@@ -29,7 +30,10 @@ pub struct Profile
 {
     pub username: String,
     pub hash: String,
-    pub salt: Vec<u8>
+    pub salt: Vec<u8>,
+    pub public_key: String,
+    pub priv_key_hash: String,
+    pub priv_key_salt: Vec<u8>
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -106,20 +110,34 @@ fn register_profile(addl_message: Option<&str>)
 
     let password: String = utils::grab_str_input(Some("Please input a password for your new profile. :"));
 
-    // crypto
+    // crypto login
 
     let mut salt: [u8; 256] = [0; 256];
     getrandom(&mut salt).expect("Failed to generate random salt.");
     let mut output: [u8; 256] = [0u8; 256];
     Argon2::default().hash_password_into(&password.into_bytes(), &salt, &mut output).expect("failed to hash password");
     let base64_encoded = general_purpose::STANDARD.encode(&output);
-    let new_profile: Profile = Profile { username: username, hash: base64_encoded, salt: salt.to_vec() };
-    //todo: make sure this works
-    utils::clear();
+
+    // gen public and private keys
+
+    let rsa = Rsa::generate(2048).unwrap();
+    let private_key = PKey::from_rsa(rsa).unwrap();
+    let mut private_key_salt = [0u8; 256];
+    getrandom(&mut private_key_salt).expect("Failed to generate key salt.");
+    let mut output: [u8; 256] = [0u8; 256];
+    //Argon2::default().hash_password_into(&private_key.p.unwrap(), &private_key_salt, &mut output).expect("failed to hash private key");
+    let public_key = private_key.public_key_to_pem().unwrap();
+    let private_key = private_key.private_key_to_pkcs8().unwrap();
+    panic!("{:#?} {:#?}", public_key, private_key);
+    
+    let new_profile = Profile::default();
 
     /*
         mang- i mean mongo time!
     */
+
+
+    utils::clear();
 
     let doc: Result<bson::Document, bson::ser::Error> = bson::to_document(&serde_json::to_value(&new_profile).unwrap());
     let doc: Result<mongodb::results::InsertOneResult, mongodb::error::Error> = coll.insert_one(doc.unwrap(), None);
@@ -187,7 +205,9 @@ fn login_upass()
                         &token_obj
                     )
                     .expect("Failed to write token to file. Please ensure you have a token.json file existing.");
-                    let profile = Profile { username: username, hash: hash.to_string(), salt: salt };
+                    let profile = Profile::default();
+                    //TODO: fix this to get the keys from db
+                    //let profile = Profile { username: username, hash: hash.to_string(), salt: salt };
                     login(&profile);
                 }
                 else
