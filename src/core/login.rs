@@ -9,8 +9,7 @@ use mongodb::bson;
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufWriter;
-use openssl::{pkey::PKey, rsa::Rsa};
-
+use openssl::{pkey::PKey, rsa::Rsa, symm::Cipher};
 /*
 
 This file handles the login system of CRIM.
@@ -31,9 +30,8 @@ pub struct Profile
     pub username: String,
     pub hash: String,
     pub salt: Vec<u8>,
-    pub public_key: String,
-    pub priv_key_hash: String,
-    pub priv_key_salt: Vec<u8>
+    pub public_key: Vec<u8>,
+    pub priv_key_enc: Vec<u8>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -115,21 +113,23 @@ fn register_profile(addl_message: Option<&str>)
     let mut salt: [u8; 256] = [0; 256];
     getrandom(&mut salt).expect("Failed to generate random salt.");
     let mut output: [u8; 256] = [0u8; 256];
-    Argon2::default().hash_password_into(&password.into_bytes(), &salt, &mut output).expect("failed to hash password");
-    let base64_encoded = general_purpose::STANDARD.encode(&output);
+    // may be a better way to do this than use .clone()
+    Argon2::default().hash_password_into(&password.clone().into_bytes(), &salt, &mut output).expect("failed to hash password");
+    let b64_pass = general_purpose::STANDARD.encode(output);
 
     // gen public and private keys
 
     let rsa = Rsa::generate(2048).unwrap();
-    let private_key = PKey::from_rsa(rsa).unwrap();
-    let mut private_key_salt = [0u8; 256];
-    getrandom(&mut private_key_salt).expect("Failed to generate key salt.");
-    let mut output: [u8; 256] = [0u8; 256];
-    //Argon2::default().hash_password_into(&private_key.p.unwrap(), &private_key_salt, &mut output).expect("failed to hash private key");
-    let public_key = private_key.public_key_to_pem().unwrap();
-    let private_key = private_key.private_key_to_pkcs8().unwrap();
-    panic!("{:#?} {:#?}", public_key, private_key);
-    
+    let pkey = PKey::from_rsa(rsa).unwrap();
+    // private key will be encrypted with the user's password
+    let bytes: [u8; 32] = [0u8; 32];
+
+    let cipher = Cipher::aes_256_cbc();
+    let b64_priv = general_purpose::STANDARD.encode(&output);
+    let public_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
+    let private_key = pkey.private_key_to_pem_pkcs8_passphrase(cipher, &password.as_bytes()).unwrap();
+    panic!("not implemented");
+    //TODO: encrypt and decrypt test messages to ensure functionality. https://docs.rs/openssl/latest/openssl/symm/index.html
     let new_profile = Profile::default();
 
     /*
