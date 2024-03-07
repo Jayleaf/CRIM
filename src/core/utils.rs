@@ -6,6 +6,7 @@ File of public utility functions that may need to be used on many programs. Don'
 
 use colored::Colorize;
 use std::io::{self, Write};
+use rand::RngCore;
 
 pub enum Position
 {
@@ -137,4 +138,11 @@ pub fn create_ui(text: Vec<&str>, position: Position)
         println!("{}", format_string_ui(line, ui_width, &position));
     }
     println!("{}", format_string_ui(&title, ui_width, &position));
+}
+
+pub fn rand_hex() -> String
+{
+    let mut bytes = [0; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    hex::encode(&bytes)
 }

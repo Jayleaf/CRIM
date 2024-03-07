@@ -1,10 +1,7 @@
-use super::login;
-use super::mongo;
-use super::utils;
+use super::{mongo, login, utils, message_relay::Conversation};
 use colored::Colorize;
 use login::Profile;
-use mongodb::bson::Document;
-use mongodb::bson::{doc, to_document};
+use mongodb::{sync::Collection, bson::{Document, doc, to_document}};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs::File;
@@ -142,6 +139,34 @@ pub fn draw_friend_mgmt(user: &MessageUser)
         }
     }
 }
+
+fn draw_convo_ui (user: &MessageUser)
+{
+    // this function will draw the conversation panel
+    // it will be a placeholder for now
+    let mut ui: Vec<&str> = vec!
+    [
+        "Conversations", 
+        "", 
+        "", 
+        "", 
+    ];
+    let conversations: mongodb::sync::Cursor<Document> = mongo::get_collection("conversations").find(None, None).unwrap();
+    for convo in conversations
+    {
+        let convo: Conversation = Conversation::from_document(convo.unwrap());
+        if convo.users.contains(&user.username)
+        {
+            let users = convo.users.join(", ");
+            let id = convo.id;
+            let string = format!("{} : {}", id, users);
+            ui.push(string.as_str());
+        }
+        
+    }
+    utils::create_ui(ui, utils::Position::Center);
+}
+
 
 fn draw_msg(user: &MessageUser)
 {

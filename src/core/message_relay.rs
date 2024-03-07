@@ -24,25 +24,27 @@ impl Message
 }
 
 #[derive(Serialize)]
-struct Conversation
+pub struct Conversation
 {
-    users: Vec<String>,
+    pub id: String,
+    pub users: Vec<String>,
     messages: Vec<Message>,
 }
 
 impl Conversation
 {
-    fn from_document (doc: Document) -> Conversation
+    pub fn from_document (doc: Document) -> Conversation
     {
+        let id: String = doc.get_str("id").unwrap().to_string();
         let users: Vec<String> = doc.get("users").unwrap().as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
         let messages: Vec<Message> = doc.get("messages").unwrap().as_array().unwrap().iter().map(|x| Message { message: x.as_document().unwrap().get("message").unwrap().as_array().unwrap().iter().map(|x| x.as_i32().unwrap() as u8).collect(), time: x.as_document().unwrap().get("time").unwrap().as_str().unwrap().to_string() }).collect();
-        Conversation { users, messages }
+        Conversation { id, users, messages }
     }
 }
 
 fn create_conversation(users: Vec<String>)
 {
-    let conversation = Conversation { users: vec![], messages: vec![] };
+    let conversation = Conversation { id: super::utils::rand_hex(), users: vec![], messages: vec![] };
     let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
     mongo::get_collection("conversations").insert_one(doc, None).unwrap();
 
