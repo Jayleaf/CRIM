@@ -204,9 +204,8 @@ fn draw_msg(user: &MessageUser)
                     return;
                 }
             }
-            // open a new conversation with the friends
-            // this is a placeholder for now
             println!("Opening a new conversation with {}", listed_friends.join(", "));
+            panic!("Not yet implemented.")
         }
         "open" =>
         {

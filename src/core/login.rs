@@ -9,6 +9,7 @@ use mongodb::bson;
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufWriter;
+use std::io::Write;
 use openssl::{pkey::PKey, rsa::Rsa, symm::Cipher};
 /*
 
@@ -115,23 +116,36 @@ fn register_profile(addl_message: Option<&str>)
     let mut output: [u8; 256] = [0u8; 256];
     // may be a better way to do this than use .clone()
     Argon2::default().hash_password_into(&password.clone().into_bytes(), &salt, &mut output).expect("failed to hash password");
-    let b64_pass = general_purpose::STANDARD.encode(output);
+    let b64_pass: String = general_purpose::STANDARD.encode(output);
 
     // gen public and private keys
 
-    let rsa = Rsa::generate(2048).unwrap();
-    let pkey = PKey::from_rsa(rsa).unwrap();
+    let rsa: Rsa<openssl::pkey::Private> = Rsa::generate(2048).unwrap();
+    let pkey: PKey<openssl::pkey::Private> = PKey::from_rsa(rsa).unwrap();
     // private key will be encrypted with the user's password
-    let bytes: [u8; 32] = [0u8; 32];
 
-    let cipher = Cipher::aes_256_cbc();
-    let b64_priv = general_purpose::STANDARD.encode(&output);
+    let cipher: Cipher = Cipher::aes_256_cbc();
     let public_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
-    let private_key = pkey.private_key_to_pem_pkcs8_passphrase(cipher, &password.as_bytes()).unwrap();
-    panic!("not implemented");
-    //TODO: encrypt and decrypt test messages to ensure functionality. https://docs.rs/openssl/latest/openssl/symm/index.html
-    let new_profile = Profile::default();
 
+    /*
+    This is a dilemma between security and convenience. Realistically, it would be better practice to have the private key encrypted at all times when it's stored,
+    no matter if its stored locally temporarily or on the server (obviously encrypted on the server already.) However, it is left in plaintext on the client's computer;
+    a security risk only solved if we had to get the client to enter a password *each time* they opened up their message logs-- and even if they did that, it would still
+    be stored in plaintext for an unknown amount of time. Further enhanced if the client exits the terminal without letting the program clear their keyfile, I believe this is
+    just something I have to accept.
+     */
+
+    let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
+    let mut file = File::create("src/userdata/pkey.key").unwrap(); // could be an env variable as to what pkey.key could be named
+    file.write_all(&private_key).expect("failed to write priv key to pkey.key");
+
+    // actually encrypt priv key and save it
+    let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8_passphrase(cipher, &password.as_bytes()).unwrap(); 
+    //https://docs.rs/openssl/latest/openssl/symm/index.html
+    let new_profile: Profile = Profile { username: username, hash: b64_pass, salt: salt.to_vec(), public_key: public_key, priv_key_enc: private_key };
+    // ^^ this is fat as HELL in the database. 33kb for a single user entry!!! Could compress somehow for strict data limits, but not important atm
+   
+   
     /*
         mang- i mean mongo time!
     */
