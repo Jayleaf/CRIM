@@ -4,7 +4,7 @@ use login::Profile;
 use mongodb::{sync::Collection, bson::{Document, doc, to_document}};
 use serde::Deserialize;
 use serde::Serialize;
-use std::fs::File;
+use std::{fs::File, io::Write};
 use std::io::BufWriter;
 use std::vec;
 use openssl::pkey::PKey;
@@ -40,23 +40,24 @@ pub fn draw_home(user: &MessageUser)
 {
     utils::clear();
     let welcome_message: String = format!("Welcome, {}.", &user.username);
-    let ui: Vec<&str> = vec![
-        welcome_message.as_str(),
-        "",
-        "",
-        "",
-        "Please select an option.",
-        "",
-        "msg : opens the message panel",
-        "manage : manage your friends",
-        "logout : log out of your account.",
+    let ui: Vec<String> = vec![
+        welcome_message.as_str().to_string(),
+        "".to_string(),
+        "".to_string(),
+        "".to_string(),
+        "Please select an option.".to_string(),
+        "".to_string(),
+        "msg : opens the message panel".to_string(),
+        "manage : manage your friends".to_string(),
+        "logout : log out of your account.".to_string(),
     ];
-    utils::create_ui(ui, utils::Position::Center);
+    utils::create_ui(&ui, utils::Position::Center);
     let opt: (String, String) = utils::grab_opt(None, vec!["msg", "manage", "logout"]);
     match opt.0.as_str()
     {
         "msg" =>
         {
+            utils::clear();
             draw_msg(user);
         }
         "manage" =>
@@ -69,6 +70,9 @@ pub fn draw_home(user: &MessageUser)
             let token = login::Token::default();
             let f: File = File::create("src/userdata/token.json").expect("Failed to write profile data to file.");
             serde_json::to_writer(BufWriter::new(f), &token).expect("Token serialization failed. Ensure token.json exists.");
+            let f = File::create("src/userdata/pkey.key").expect("no pkey file");
+            serde_json::to_writer(BufWriter::new(f), "").expect("Failed to empty private key. Ensure pkey.key exists.");
+
             login::login_init();
         }
         _ =>
@@ -83,16 +87,15 @@ pub fn draw_friend_mgmt(user: &MessageUser)
 {
     let user: MessageUser = retrieve_user_data(&user.username).unwrap(); // the user arg can be trusted to have a proper username but not proper friends.
     let friends: &Vec<String> = &user.friends;
-    let mut ui = vec!["Friends Management", "", ""];
-    for friend in friends
-    {
-        ui.push(friend.as_str());
+    let mut ui: Vec<String> = vec!["Friends Management".to_string(), "".to_string(), "".to_string()];
+    for friend in friends {
+        ui.push(friend.to_string());
     }
-    ui.push("");
-    ui.push("add <friend> : adds friend by username");
-    ui.push("rm <friend> : removes friend by username");
-    ui.push("back : returns to home page");
-    utils::create_ui(ui, utils::Position::Center);
+    ui.push("".to_string());
+    ui.push("add <friend> : adds friend by username".to_string());
+    ui.push("rm <friend> : removes friend by username".to_string());
+    ui.push("back : returns to home page".to_string());
+    utils::create_ui(&ui, utils::Position::Center);
     let opt: (String, String) = utils::grab_opt(Some("Please input your option."), vec!["add", "rm", "back"]);
     match opt.0.as_str()
     {
@@ -144,12 +147,13 @@ fn draw_convo_ui (user: &MessageUser)
 {
     // this function will draw the conversation panel
     // it will be a placeholder for now
-    let mut ui: Vec<&str> = vec!
+    let mut ui: Vec<String> = vec!
     [
-        "Conversations", 
-        "", 
-        "", 
-        "", 
+        "Conversations".to_string(), 
+        "".to_string(), 
+        "open <id> : open a conversation".to_string(), 
+        "back : return to message panel".to_string(),
+        "".to_string()
     ];
     let conversations: mongodb::sync::Cursor<Document> = mongo::get_collection("conversations").find(None, None).unwrap();
     for convo in conversations
@@ -160,11 +164,30 @@ fn draw_convo_ui (user: &MessageUser)
             let users = convo.users.join(", ");
             let id = convo.id;
             let string = format!("{} : {}", id, users);
-            ui.push(string.as_str());
+            ui.push(string);
         }
         
     }
-    utils::create_ui(ui, utils::Position::Center);
+    utils::create_ui(&ui, utils::Position::Center);
+    let opt = utils::grab_opt(None, vec!["open", "back"]);
+    match opt.0.as_str()
+    {
+        "open" =>
+        {
+            // open a conversation
+            // this will be a placeholder for now
+            println!("Opening conversation...");
+        }
+        "back" =>
+        {
+            utils::clear();
+            draw_msg(&user);
+        }
+        _ =>
+        {
+            draw_convo_ui(&user);
+        }
+    }
 }
 
 
@@ -173,19 +196,19 @@ fn draw_msg(user: &MessageUser)
     //TODO: exit option
     let user: MessageUser = retrieve_user_data(&user.username).unwrap();
     let friends: &Vec<String> = &user.friends;
-    let ui =vec!
-    [
-        "Message Panel",
-        "",
-        "",
-        "",
-        "new <friend> : start a new single conversation with a friend.",
-        "new --multi <friend, friend> : start a new multi-person conversation.",
-        "open : view open conversations you are a participant in."
+    let ui: Vec<String> = vec![
+        "Message Panel".to_string(),
+        "".to_string(),
+        "".to_string(),
+        "".to_string(),
+        "new <friend> : start a new single conversation with a friend.".to_string(),
+        "new --multi <friend, friend> : start a new multi-person conversation.".to_string(),
+        "open : view open conversations you are a participant in.".to_string(),
+        "back : return to home page.".to_string(),
     ];
-    utils::create_ui(ui, utils::Position::Center);
+    utils::create_ui(&ui, utils::Position::Center);
     // flags aren't dynamic. I could fix that at some point but it's unnecessary right now.
-    let opt: (String, String) = utils::grab_opt(None, vec!["new", "new --multi", "open"]);
+    let opt: (String, String) = utils::grab_opt(None, vec!["new", "new --multi", "open", "back"]);
     match opt.0.as_str()
     {
         "new" =>
@@ -193,9 +216,10 @@ fn draw_msg(user: &MessageUser)
             let friend: &str = opt.1.as_str();
             if friends.contains(&friend.to_string())
             {
-                // open a new conversation with the friend
-                // this is a placeholder for now
                 println!("Opening a new conversation with {}", friend.blue());
+                super::message_relay::create_conversation(vec![user.username.clone(), friend.to_string()]);
+                utils::clear();
+                draw_convo_ui(&user)
             }
             else
             {
@@ -223,9 +247,13 @@ fn draw_msg(user: &MessageUser)
         }
         "open" =>
         {
-            // open the conversation panel
-            // this is a placeholder for now
-            println!("Opening the conversation panel.");
+            utils::clear();
+            draw_convo_ui(&user);
+        }
+        "back" =>
+        {
+            utils::clear();
+            draw_home(&user);
         }
         _ =>
         {

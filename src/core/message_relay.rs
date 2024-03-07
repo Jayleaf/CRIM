@@ -42,9 +42,9 @@ impl Conversation
     }
 }
 
-fn create_conversation(users: Vec<String>)
+pub fn create_conversation(users: Vec<String>)
 {
-    let conversation = Conversation { id: super::utils::rand_hex(), users: vec![], messages: vec![] };
+    let conversation = Conversation { id: super::utils::rand_hex(), users: users, messages: vec![] };
     let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
     mongo::get_collection("conversations").insert_one(doc, None).unwrap();
 

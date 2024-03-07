@@ -35,6 +35,21 @@ pub struct Profile
     pub priv_key_enc: Vec<u8>,
 }
 
+impl Profile
+{
+    fn from_document(doc: bson::Document) -> Profile
+    {
+        Profile 
+        {
+            username: doc.get_str("username").unwrap().to_string(),
+            hash: doc.get_str("hash").unwrap().to_string(),
+            salt: doc.get_array("salt").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>(),
+            public_key: doc.get_array("public_key").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>(),
+            priv_key_enc: doc.get_array("priv_key_enc").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>(),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Default)]
 struct ProfileContainer
 {
@@ -204,13 +219,17 @@ fn login_upass()
         {
             Some(doc) =>
             {
-                let hash = doc.get("hash").unwrap().as_str().unwrap();
-                let salt: &Vec<bson::Bson> = doc.get_array("salt").unwrap();
-                let salt: Vec<u8> = salt.iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>();
+                let profile = Profile::from_document(doc.clone());
                 let mut output: [u8; 256] = [0u8; 256];
-                Argon2::default().hash_password_into(&password.into_bytes(), &salt, &mut output).expect("failed to hash password");
+                Argon2::default().hash_password_into(&password.clone().into_bytes(), &profile.salt, &mut output).expect("failed to hash password");
                 let base64_encoded = general_purpose::STANDARD.encode(&output);
-                if base64_encoded == hash
+                /*
+                The glorious flaw. Currently, authentication is purely and wholly based on an if statement.
+                The one silver lining here is that it would be impossible to decrypt the private key without the password, so even if someone did
+                manipulate the binaries to let them log in to any account they want, they wouldn't be able to read anything. If they tried to send something,
+                the recipient would notice it's unreadable and realize something's up.
+                 */
+                if base64_encoded == profile.hash
                 {
                     let token: bson::Bson = doc.get("_id").unwrap().clone();
                     let token_obj: Token = Token { token: token.as_object_id().unwrap().to_string() };
@@ -219,10 +238,12 @@ fn login_upass()
                         &token_obj
                     )
                     .expect("Failed to write token to file. Please ensure you have a token.json file existing.");
-                    let profile = Profile::default();
-                    //TODO: fix this to get the keys from db
-                    //let profile = Profile { username: username, hash: hash.to_string(), salt: salt };
+
+                    let private_key: Vec<u8> = Rsa::private_key_from_pem_passphrase(&profile.priv_key_enc, &password.into_bytes()).unwrap().private_key_to_pem().unwrap();
+                    let mut file = File::create("src/userdata/pkey.key").unwrap();
+                    file.write_all(&private_key).expect("failed to write priv key to pkey.key");
                     login(&profile);
+                    break;
                 }
                 else
                 {
@@ -257,16 +278,16 @@ fn login(p: &Profile)
 pub fn login_init()
 {
     utils::clear();
-    let ui = vec![
-        "Welcome to CRIM.",
-        "",
-        "",
-        "",
-        "register : register an account",
-        "login : login to an existing account",
-        "exit : leave CRIM",
+    let ui: Vec<String> = vec![
+        "Welcome to CRIM.".to_string(),
+        "".to_string(),
+        "".to_string(),
+        "".to_string(),
+        "register : register an account".to_string(),
+        "login : login to an existing account".to_string(),
+        "exit : leave CRIM".to_string(),
     ];
-    utils::create_ui(ui, utils::Position::Center);
+    utils::create_ui(&ui, utils::Position::Center);
     let selection: (String, String) = utils::grab_opt(None, vec!["register", "login", "exit"]);
     match selection.0.as_str()
     {

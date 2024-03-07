@@ -106,12 +106,13 @@ pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, Str
     }
 }
 
-pub fn create_ui(text: Vec<&str>, position: Position)
+pub fn create_ui(text: &Vec<String>, position: Position)
 {
     let floor_char = dotenv::var("UI_FLOOR_CHAR").unwrap().parse::<char>().unwrap();
     let ui_width: usize = 
     {
-        let mut t: Vec<&str> = Vec::clone(&text);
+        let mut t: Vec<String> = Vec::clone(&text);
+        // make a copy of the text variable because it needs to be altered for finding the largest string.
         t.sort_by(|a, b| a.len().cmp(&b.len()));
         t.reverse();
         if dotenv::var("UI_DYNAMIC").unwrap() == "true"
@@ -142,7 +143,7 @@ pub fn create_ui(text: Vec<&str>, position: Position)
 
 pub fn rand_hex() -> String
 {
-    let mut bytes = [0; 32];
+    let mut bytes = [0; 4];
     rand::thread_rng().fill_bytes(&mut bytes);
     hex::encode(&bytes)
 }
