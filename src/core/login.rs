@@ -138,7 +138,7 @@ fn register_profile(addl_message: Option<&str>)
     let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
     let mut file = File::create("src/userdata/pkey.key").unwrap(); // could be an env variable as to what pkey.key could be named
     file.write_all(&private_key).expect("failed to write priv key to pkey.key");
-
+    
     // actually encrypt priv key and save it
     let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8_passphrase(cipher, &password.as_bytes()).unwrap(); 
     //https://docs.rs/openssl/latest/openssl/symm/index.html

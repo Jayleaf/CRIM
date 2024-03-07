@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 argon2 = "0.5.3"
 base64 = "0.21.7"
+chrono = "0.4.35"
 colored = "2.1.0"
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"

@@ -20,17 +20,6 @@ pub struct MessageUser
     friends: Vec<String> // this is going to be a vector of usernames
 }
 
-struct Message
-{
-    message: String,
-    time: String
-}
-
-struct Conversation
-{
-    users: Vec<String>,
-    messages: Vec<Message>
-}
 
 impl MessageUser
 {
