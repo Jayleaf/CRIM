@@ -142,14 +142,6 @@ fn register_profile(addl_message: Option<&str>)
     let cipher: Cipher = Cipher::aes_256_cbc();
     let public_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
 
-    /*
-    This is a dilemma between security and convenience. Realistically, it would be better practice to have the private key encrypted at all times when it's stored,
-    no matter if its stored locally temporarily or on the server (obviously encrypted on the server already.) However, it is left in plaintext on the client's computer;
-    a security risk only solved if we had to get the client to enter a password *each time* they opened up their message logs-- and even if they did that, it would still
-    be stored in plaintext for an unknown amount of time. Further enhanced if the client exits the terminal without letting the program clear their keyfile, I believe this is
-    just something I have to accept.
-     */
-
     let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
     let mut file = File::create("src/userdata/pkey.key").unwrap(); // could be an env variable as to what pkey.key could be named
     file.write_all(&private_key).expect("failed to write priv key to pkey.key");
