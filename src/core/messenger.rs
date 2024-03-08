@@ -1,10 +1,10 @@
-use super::{mongo, login, utils, message_relay::Conversation};
+use super::{login, message_relay::{self, receive_messages, Conversation}, mongo, utils};
 use colored::Colorize;
 use login::Profile;
-use mongodb::{sync::Collection, bson::{Document, doc, to_document}};
+use mongodb::{bson::{doc, to_document, Document}, sync::Collection};
 use serde::Deserialize;
 use serde::Serialize;
-use std::{fs::File, io::Write};
+use std::{fs::File, io::Write, time::{self, SystemTime}};
 use std::io::BufWriter;
 use std::vec;
 use openssl::pkey::PKey;
@@ -159,6 +159,7 @@ fn draw_convo_ui (user: &MessageUser)
     for convo in conversations
     {
         let convo: Conversation = Conversation::from_document(convo.unwrap());
+        // idk how to do a .find or a .any in a filter for .find
         if convo.users.contains(&user.username)
         {
             let users = convo.users.join(", ");
@@ -174,9 +175,28 @@ fn draw_convo_ui (user: &MessageUser)
     {
         "open" =>
         {
-            // open a conversation
-            // this will be a placeholder for now
-            println!("Opening conversation...");
+            match mongo::get_collection("conversations").find(doc!("id": opt.1.as_str()), None)
+            {
+                Ok(convos) =>
+                {
+                    let convos = convos.into_iter().map(|x| x.unwrap()).collect::<Vec<Document>>();
+                    if convos.len() == 0
+                    {
+                        utils::clear();
+                        utils::addl_message("Conversation does not exist.", "red");
+                        draw_convo_ui(&user);
+                    }
+                    // jerry rigged af
+                    let convo = Conversation::from_document(convos.get(0).unwrap().clone());
+                    draw_messenger_ui(&user, &convo);
+                }
+                Err(_) =>
+                {
+                    utils::clear();
+                    utils::addl_message("Failed to retrieve conversation data.", "red");
+                    draw_convo_ui(&user);
+                }
+            }
         }
         "back" =>
         {
@@ -187,6 +207,52 @@ fn draw_convo_ui (user: &MessageUser)
         {
             draw_convo_ui(&user);
         }
+    }
+}
+
+fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
+{
+    loop
+    {
+        let mut ui: Vec<String> = vec![
+            "Messenger".to_string(),
+            "".to_string(),
+            "".to_string(),
+        ];
+
+        // TODO: handle this better
+        let messages: Vec<message_relay::Message> = receive_messages(convo.id.as_str()).unwrap();
+        for message in messages
+        {
+            let message: String = String::from_utf8(message.message).unwrap();
+            ui.push(message);
+        }
+        ui.push("".to_string());
+        ui.push("send <message> : send a message".to_string());
+        ui.push("back : return to conversation list".to_string());
+        utils::create_ui(&ui, utils::Position::Center);
+        let opt: (String, String) = utils::grab_opt(None, vec!["send", "back"]);
+        match opt.0.as_str()
+        {
+            "send" =>
+            {
+                let message = message_relay::Message { message: opt.1.as_bytes().to_vec(), time: chrono::offset::Local::now().to_string() };
+                message_relay::upload_message(message, &convo.id, &user.username).expect("failed to upload message");
+                draw_messenger_ui(user, convo)
+
+            }
+            "back" =>
+            {
+                utils::clear();
+                draw_convo_ui(user);
+            }
+            _ =>
+            {
+                utils::clear();
+                draw_messenger_ui(user, convo);
+            }
+        }
+    
     }
 }
 
