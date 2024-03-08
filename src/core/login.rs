@@ -223,12 +223,7 @@ fn login_upass()
                 let mut output: [u8; 256] = [0u8; 256];
                 Argon2::default().hash_password_into(&password.clone().into_bytes(), &profile.salt, &mut output).expect("failed to hash password");
                 let base64_encoded = general_purpose::STANDARD.encode(&output);
-                /*
-                The glorious flaw. Currently, authentication is purely and wholly based on an if statement.
-                The one silver lining here is that it would be impossible to decrypt the private key without the password, so even if someone did
-                manipulate the binaries to let them log in to any account they want, they wouldn't be able to read anything. If they tried to send something,
-                the recipient would notice it's unreadable and realize something's up.
-                 */
+
                 if base64_encoded == profile.hash
                 {
                     let token: bson::Bson = doc.get("_id").unwrap().clone();
