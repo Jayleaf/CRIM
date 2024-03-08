@@ -221,12 +221,17 @@ fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
         ];
 
         // TODO: handle this better
+        
         let messages: Vec<message_relay::Message> = receive_messages(convo.id.as_str()).unwrap();
         for message in messages
         {
-            let message: String = String::from_utf8(message.message).unwrap();
+            let messagecontent: String = String::from_utf8(message.message).unwrap();
+            // would be cool to color username but it adds hidden characters, maybe work around it
+            let message: String = format!("{}: {}", message.sender, messagecontent).as_str().trim().to_string();
+            println!("{}", message.len());
             ui.push(message);
         }
+        
         ui.push("".to_string());
         ui.push("send <message> : send a message".to_string());
         ui.push("back : return to conversation list".to_string());
@@ -236,10 +241,9 @@ fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
         {
             "send" =>
             {
-                let message = message_relay::Message { message: opt.1.as_bytes().to_vec(), time: chrono::offset::Local::now().to_string() };
+                let message = message_relay::Message { sender: user.username.clone(), message: opt.1.as_bytes().to_vec(), time: chrono::offset::Local::now().to_string() };
                 message_relay::upload_message(message, &convo.id, &user.username).expect("failed to upload message");
                 draw_messenger_ui(user, convo)
-
             }
             "back" =>
             {
@@ -313,7 +317,7 @@ fn draw_msg(user: &MessageUser)
         }
         "open" =>
         {
-            utils::clear();
+            //utils::clear();
             draw_convo_ui(&user);
         }
         "back" =>

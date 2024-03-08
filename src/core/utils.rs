@@ -39,6 +39,7 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
             let rng: f64 = rng as f64 / 2 as f64;
             let wall_char = dotenv::var("UI_WALL_CHAR").unwrap().parse::<char>().unwrap();
             temp_str.push(wall_char);
+            // debug print!("{}", string_length);
             for _ in 0..rng as usize
             {
                 temp_str.push(' ');
