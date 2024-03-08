@@ -142,14 +142,6 @@ fn register_profile(addl_message: Option<&str>)
     let cipher: Cipher = Cipher::aes_256_cbc();
     let public_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
 
-    /*
-    This is a dilemma between security and convenience. Realistically, it would be better practice to have the private key encrypted at all times when it's stored,
-    no matter if its stored locally temporarily or on the server (obviously encrypted on the server already.) However, it is left in plaintext on the client's computer;
-    a security risk only solved if we had to get the client to enter a password *each time* they opened up their message logs-- and even if they did that, it would still
-    be stored in plaintext for an unknown amount of time. Further enhanced if the client exits the terminal without letting the program clear their keyfile, I believe this is
-    just something I have to accept.
-     */
-
     let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
     let mut file = File::create("src/userdata/pkey.key").unwrap(); // could be an env variable as to what pkey.key could be named
     file.write_all(&private_key).expect("failed to write priv key to pkey.key");
@@ -223,12 +215,7 @@ fn login_upass()
                 let mut output: [u8; 256] = [0u8; 256];
                 Argon2::default().hash_password_into(&password.clone().into_bytes(), &profile.salt, &mut output).expect("failed to hash password");
                 let base64_encoded = general_purpose::STANDARD.encode(&output);
-                /*
-                The glorious flaw. Currently, authentication is purely and wholly based on an if statement.
-                The one silver lining here is that it would be impossible to decrypt the private key without the password, so even if someone did
-                manipulate the binaries to let them log in to any account they want, they wouldn't be able to read anything. If they tried to send something,
-                the recipient would notice it's unreadable and realize something's up.
-                 */
+
                 if base64_encoded == profile.hash
                 {
                     let token: bson::Bson = doc.get("_id").unwrap().clone();
