@@ -103,7 +103,7 @@ pub fn draw_friend_mgmt(user: &MessageUser)
         {
             let friend: &str = opt.1.as_str();
             println!("{}", friend);
-            if add_friend(&user, &friend)
+            if add_friend(&user, friend)
             {
                 utils::clear();
                 utils::addl_message("Successfully added friend.", "green");
@@ -120,7 +120,7 @@ pub fn draw_friend_mgmt(user: &MessageUser)
         {
             utils::clear();
             let friend: &str = opt.1.as_str();
-            if remove_friend(&user, &friend)
+            if remove_friend(&user, friend)
             {
                 utils::addl_message("Successfully removed friend.", "green");
                 draw_friend_mgmt(&user);

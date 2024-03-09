@@ -3,11 +3,11 @@
 use std::{fs::{self, File}, io::Read};
 
 use mongodb::bson::{self, doc};
-use openssl::{pkey::{Private, Public}, rsa::{Padding, Rsa}};
+use openssl::{pkey::{Private, Public}, rsa::{Padding, Rsa}, symm};
 use serde::{Deserialize, Serialize};
 use super::mongo;
 use mongodb::bson::{Bson, Document};
-
+use getrandom::getrandom;
 
 /*
 Currently, the sender of the message cannot read their own message. This will have to be fixed as follows.
@@ -22,9 +22,41 @@ pub struct Message
     pub time: String
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UserKey
+{
+    owner: String,
+    key: Vec<u8>
+}
+
+impl UserKey
+{
+    fn from_document(doc: &Document) -> UserKey
+    {
+        let owner: String = doc.get_str("owner").unwrap().to_string();
+        let key: Vec<u8> = doc.get_array("key").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect();
+        UserKey {owner, key}
+    }
+    fn encrypt(key: &Vec<u8>, user: &String) -> UserKey
+    {
+        let pub_key: Vec<u8> = mongo::get_collection("accounts").find_one(doc!{"username": user}, None).unwrap().unwrap().get_array("public_key").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect();
+        let pub_key: Rsa<Public> = Rsa::public_key_from_pem(pub_key.as_slice()).unwrap();
+        let mut encrypted_key: Vec<u8> = vec![0; pub_key.size() as usize];
+        pub_key.public_encrypt(key, &mut encrypted_key, Padding::PKCS1).expect("failed to encrypt key");
+        UserKey { owner: user.clone(), key: encrypted_key}
+    }
+    fn decrypt(&mut self, encrypted_key: Vec<u8>, priv_key: Rsa<Private>) -> UserKey
+    {
+        let mut decrypted_key: Vec<u8> = vec![0; priv_key.size() as usize];
+        priv_key.private_decrypt(&encrypted_key, &mut decrypted_key, Padding::PKCS1).expect("failed to decrypt key");
+        UserKey { owner: String::clone(&self.owner), key: decrypted_key}
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct EncryptedMessage
 {
+    // data contains a serialized message struct
     pub data: Vec<u8>
 }
 
@@ -53,6 +85,7 @@ pub struct Conversation
 {
     pub id: String,
     pub users: Vec<String>,
+    pub keys: Vec<UserKey>,
     pub messages: Vec<EncryptedMessage>,
 }
 
@@ -63,25 +96,39 @@ impl Conversation
         let id: String = doc.get_str("id").unwrap().to_string();
         let users: Vec<String> = doc.get("users").unwrap().as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
         let messages: Vec<EncryptedMessage> = doc.get("messages").unwrap().as_array().unwrap().iter().map(|x| EncryptedMessage::from_document(x.as_document().unwrap())).collect();
-        Conversation { id, users, messages }
+        let keys : Vec<UserKey> = doc.get("keys").unwrap().as_array().unwrap().iter().map(|x| UserKey::from_document(x.as_document().unwrap())).collect();
+        Conversation { id, users, messages, keys }
     }
 }
 
 pub fn create_conversation(users: Vec<String>)
 {
-    let conversation = Conversation { id: super::utils::rand_hex(), users: users, messages: vec![] };
+    let mut key: [u8; 256] = [0; 256];
+    getrandom(&mut key).expect("Failed to generate random user key.");
+    let conversation = Conversation { id: super::utils::rand_hex(), users: users.clone(), keys: users.clone().iter().map(|x| UserKey::encrypt(&key.to_vec(), x)).collect(),  messages: vec![] };
     let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
     mongo::get_collection("conversations").insert_one(doc, None).unwrap();
 
 }
 
-fn encrypt_message(message: Message, public_key: Rsa<Public>) -> EncryptedMessage
+fn encrypt_message(message: &Message, convo: &Conversation) -> EncryptedMessage
 {
     // encrypts serialized message object and returns byte array
-    let message: String = serde_json::to_string(&message).unwrap();
-    let mut encrypted_message: Vec<u8> = vec![0; public_key.size() as usize];
-    public_key.public_encrypt(message.as_bytes(), &mut encrypted_message, Padding::PKCS1).expect("failed to encrypt message");
-    EncryptedMessage{data: encrypted_message}
+    // first, get the public-key encrypted conversation key that belongs to the other user (will need to be refactored big time for multiple users)
+    let mut convokey: UserKey = convo.keys.iter().find(|x| x.owner != message.sender.as_str()).unwrap().clone();
+    // then, decrypt that with your private key
+    let priv_key: String = fs::read_to_string("src/userdata/pkey.key").expect("failed to open key file");
+    let priv_key = Rsa::private_key_from_pem(priv_key.as_bytes()).unwrap();
+    let mut decrypted_convo_key: Vec<u8> = vec![0; priv_key.size() as usize];
+    priv_key.private_decrypt(convokey.key.as_slice(), &mut decrypted_convo_key, Padding::PKCS1).expect("failed to decrypt convo key");
+    convokey.key = decrypted_convo_key.to_vec();
+    // now, serialize the message payload, encrypt that serialized payload, and return the encrypted message object.
+    let messagestr: String = serde_json::to_string(&message).unwrap();
+    let cipher: symm::Cipher = symm::Cipher::aes_256_cbc();
+    let encrypted_message_struct = symm::encrypt(cipher, convokey.key.as_slice(), None, messagestr.as_bytes()).unwrap();
+    // TODO: you stopped here. start to decrypt the messages next.
+    panic!("");
+    EncryptedMessage{data: encrypted_message_struct}
 }
 
 fn decrypt_message(encrypted_message: &EncryptedMessage, private_key: &Rsa<Private>) -> Message
@@ -106,10 +153,8 @@ pub fn upload_message(message: Message, convo_id: &str, sender: &str) -> Result<
         {
             Some(doc) => {
                 let mut conversation: Conversation = Conversation::from_document(doc);
-                // encrypt given message with the public key of the other user
-                let tgt_pub_key: Document = mongo::get_collection("accounts").find(doc! {"username": conversation.users.iter().find(|x| *x != sender)}, None).unwrap().current().try_into().unwrap();
-                let tgt_pub_key: Vec<u8> = tgt_pub_key.get_array("public_key").unwrap().into_iter().map(|x| x.as_i64().unwrap() as u8).collect();
-                let message: EncryptedMessage = encrypt_message(message, Rsa::public_key_from_pem(&tgt_pub_key).unwrap());
+                // encrypt given message
+                let message: EncryptedMessage = encrypt_message(&message, &conversation);
                 conversation.messages.push(message);
                 let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
                 // fix line below
