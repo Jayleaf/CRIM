@@ -20,6 +20,10 @@ let new_profile: Profile = Profile { username: username, hash: base64_encoded, s
 
 // database actions below
 ```
+Due to project constraints, I cannot set up a dedicated backend, so authentication is not very secure; ideally, user authentication would occur serverside.
+However, for this specific project, it's not a major concern because with E2EE, messages would not be readable either way without the private key, which is encrypted
+with the user's password.
+For future projects though, I may need to work in a backend to be more secure with user auth.
 
 ### E2EE with Messaging
 Wip :)
