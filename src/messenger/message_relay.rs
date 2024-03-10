@@ -1,5 +1,5 @@
 use std::fs;
-use super::mongo;
+use super::{mongo, structs::Account};
 use getrandom::getrandom;
 use mongodb::bson::{self, doc};
 use mongodb::bson::Document;
@@ -28,34 +28,6 @@ pub struct RawMessage
     pub time: String
 }
 
-impl RawMessage
-{
-    fn from_document(doc: Document) -> RawMessage
-    {
-        let sender: String = doc
-            .get("sender")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .to_string();
-        let message: Vec<u8> = doc
-            .get("message")
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|x| x.as_i32().unwrap() as u8)
-            .collect();
-        let time: String = doc
-            .get("time")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .to_string();
-        RawMessage { sender, message, time }
-    }
-}
-
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct UserKey
@@ -79,15 +51,7 @@ impl UserKey
     }
     fn encrypt(key: &[u8], user: &String) -> UserKey
     {
-        let pub_key: Vec<u8> = mongo::get_collection("accounts")
-            .find_one(doc! {"username": user}, None)
-            .unwrap()
-            .unwrap()
-            .get_array("public_key")
-            .unwrap()
-            .iter()
-            .map(|x| x.as_i64().unwrap() as u8)
-            .collect();
+        let pub_key: Vec<u8> = Account::get_account(user).unwrap().public_key;
         let pub_key: Rsa<Public> = Rsa::public_key_from_pem(pub_key.as_slice()).expect("Failed to retrieve a public key from database.");
         let mut encrypted_key: Vec<u8> = vec![0; pub_key.size() as usize];
         pub_key
@@ -243,7 +207,7 @@ fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessa
     EncryptedMessage { data: encrypted_message_struct }
 }
 
-pub fn upload_message(message: RawMessage, convo_id: &str, sender: &str) -> Result<(), String>
+pub fn upload_message(message: &RawMessage, convo_id: &str) -> Result<(), String>
 {
     /*
     Encrypt message with the other user's public key, and upload it to the conversation stored in the db.
@@ -257,10 +221,10 @@ pub fn upload_message(message: RawMessage, convo_id: &str, sender: &str) -> Resu
             {
                 let mut conversation: Conversation = Conversation::from_document(&doc);
                 // encrypt given message
-                let message: EncryptedMessage = encrypt_message(&message, &conversation);
+                let message: EncryptedMessage = encrypt_message(message, &conversation);
                 conversation.messages.push(message);
                 let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
-                // fix line below
+                // TODO: make this an implementation of the conversation struct. Conversation::update()
                 mongo::get_collection("conversations")
                     .replace_one(doc!("id": conversation.id), doc, None)
                     .unwrap();

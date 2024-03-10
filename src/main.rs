@@ -1,4 +1,5 @@
 mod core;
+mod messenger;
 
 fn main()
 {

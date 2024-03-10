@@ -1,45 +1,15 @@
 use super::{
-    login, message_relay::{self, receive_messages, Conversation, RawMessage}, mongo, utils
+    message_relay::{self, receive_messages, Conversation, RawMessage}, 
+    mongo, 
+    utils,
+    login,
+    structs::Account
 };
 use colored::Colorize;
-use login::Profile;
-use mongodb::bson::{doc, to_document, Document};
-use serde::Deserialize;
-use serde::Serialize;
+use mongodb::bson::{doc, Document};
 use std::io::BufWriter;
 use std::vec;
 use std::fs::File;
-
-//----------------------------------------------//
-//                                              //
-//          Structs & Implementations           //
-//                                              //
-//----------------------------------------------//
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct MessageUser
-{
-    token: String,
-    username: String,
-    friends: Vec<String> // this is going to be a vector of usernames
-}
-
-impl MessageUser
-{
-    fn from_document(doc: Document) -> Self
-    {
-        MessageUser {
-            token: doc.get_str("token").unwrap().to_string(),
-            username: doc.get_str("username").unwrap().to_string(),
-            friends: doc
-                .get_array("friends")
-                .unwrap()
-                .iter()
-                .map(|x| x.as_str().unwrap().to_string())
-                .collect()
-        }
-    }
-}
 
 //----------------------------------------------//
 //                                              //
@@ -47,7 +17,7 @@ impl MessageUser
 //                                              //
 //----------------------------------------------//
 
-pub fn draw_home_ui(user: &MessageUser)
+pub fn draw_home_ui(user: &Account)
 {
     /*
     Draws the home page for the messenger. This is the first page the user sees when they log in.
@@ -82,12 +52,8 @@ pub fn draw_home_ui(user: &MessageUser)
         }
         "logout" =>
         {
-            let token = login::Token::default();
-            let f: File = File::create("src/userdata/token.json").expect("Failed to write profile data to file.");
-            serde_json::to_writer(BufWriter::new(f), &token).expect("Token serialization failed. Ensure token.json exists.");
             let f = File::create("src/userdata/pkey.key").expect("no pkey file");
             serde_json::to_writer(BufWriter::new(f), "").expect("Failed to empty private key. Ensure pkey.key exists.");
-
             login::login_init();
         }
         _ => {}
@@ -95,12 +61,12 @@ pub fn draw_home_ui(user: &MessageUser)
 }
 
 
-pub fn draw_friend_mgmt_ui(user: &MessageUser)
+pub fn draw_friend_mgmt_ui(user: &Account)
 {
     /*
     Draws the friend management panel, where users can add/remove friends.
     */
-    let user: MessageUser = retrieve_user_data(&user.username).unwrap(); // the user arg can be trusted to have a proper username but not proper friends.
+    let user: Account = Account::get_account(&user.username).unwrap(); // the user arg can be trusted to have a proper username but not proper friends.
     let friends: &Vec<String> = &user.friends;
     let mut ui: Vec<String> = vec!["Friends Management".to_string(), "".to_string(), "".to_string()];
     for friend in friends
@@ -156,7 +122,7 @@ pub fn draw_friend_mgmt_ui(user: &MessageUser)
 }
 
 
-fn draw_convo_list_ui(user: &MessageUser)
+fn draw_convo_list_ui(user: &Account)
 {
     /*
     Draws the direct conversation panel, which lists all the conversations the user is a part of.
@@ -220,7 +186,7 @@ fn draw_convo_list_ui(user: &MessageUser)
     }
 }
 
-fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
+fn draw_messenger_ui(user: &Account, convo: &Conversation)
 {
     /*
     The actual messenger UI. This is where the user can send and receive messages.
@@ -261,7 +227,7 @@ fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
                     message: opt.1.as_bytes().to_vec(), 
                     time: chrono::offset::Local::now().to_string()
                 };
-                message_relay::upload_message(message, &convo.id, &user.username).expect("failed to upload message");
+                message_relay::upload_message(&message, &convo.id).expect("failed to upload message");
                 draw_messenger_ui(user, convo)
             }
             "back" =>
@@ -274,13 +240,13 @@ fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
     }
 }
 
-fn draw_messenger_home_ui(user: &MessageUser)
+fn draw_messenger_home_ui(user: &Account)
 {
     /*
     Draws the messenger home UI, which will let users start conversations or view the ones they're a part of.
     */
 
-    let user: MessageUser = retrieve_user_data(&user.username).unwrap();
+    let user: Account = Account::get_account(&user.username).unwrap();
     let friends: &Vec<String> = &user.friends;
     let ui: Vec<String> = vec![
         "Message Panel".to_string(),
@@ -352,91 +318,13 @@ fn draw_messenger_home_ui(user: &MessageUser)
 //                                                                     //
 //---------------------------------------------------------------------//
 
-pub fn create_user(profile: &login::Profile) -> MessageUser
-{
-    // This function will find a user matching the profile in the accounts database, and create a messageuser database entry from it.
-    let account_collection: mongodb::sync::Collection<Document> = mongo::get_collection("accounts");
-    let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
-
-    let user: MessageUser = {
-        match account_collection.find_one(doc! { "username": &profile.username }, None)
-        {
-            Ok(Some(unwrapped_collection)) => MessageUser {
-                token: unwrapped_collection
-                    .get_object_id("_id")
-                    .unwrap()
-                    .to_string(),
-                username: unwrapped_collection
-                    .get_str("username")
-                    .unwrap()
-                    .to_string(),
-                friends: Vec::new()
-            },
-            Err(_) =>
-            {
-                panic!("Tried to create a user with an invalid profile.")
-            }
-            Ok(None) =>
-            {
-                panic!("Tried to create a user with an invalid profile.")
-            }
-        }
-    };
-    let doc = to_document(&serde_json::to_value(&user).unwrap());
-    user_collection
-        .insert_one(doc.unwrap(), None)
-        .expect("Failed to create a new messageuser in the db.");
-    user
-}
 
 
-fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
-{
-    let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
-    let filter = doc! { "username": &user.username };
-    let update = doc! { "$set": { "username": &user.username, "friends": &user.friends } };
-    match user_collection.update_one(filter, update, None)
-    {
-        Ok(_) =>
-        {
-            // validate that the data actually was updated on the backend
-            let dbdata = retrieve_user_data(&user.username).unwrap();
-            if dbdata.username == user.username && dbdata.friends == user.friends
-            {
-                Ok(dbdata)
-            }
-            else
-            {
-                Err(())
-            }
-        }
-        Err(_) => Err(())
-    }
-}
-
-
-fn retrieve_user_data(username: &str) -> Option<MessageUser>
-{
-    // This function will retrieve the user's data from the database and return it as a MessageUser. Ideally, don't do this often, because you don't want to spam the db.
-    let user_collection: mongodb::sync::Collection<Document> = mongo::get_collection("messageusers");
-    // messageusers and accounts are different, because the account coll holds passwords and shit that we don't need.
-    match user_collection.find_one(doc! { "username": &username  }, None)
-    {
-        Ok(data) => match data
-        {
-            Some(d) => return Some(MessageUser::from_document(d)),
-            None => return None
-        },
-        Err(_) => return None
-    };
-}
-
-
-fn add_friend(user: &MessageUser, friend: &str) -> bool
+fn add_friend(user: &Account, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
-    let mut udata: MessageUser = retrieve_user_data(&user.username).unwrap(); //should never fail
-    if retrieve_user_data(&friend).is_none()
+    let mut udata: Account = Account::get_account(&user.username).unwrap(); //should never fail
+    if Account::get_account(&friend).is_none()
     {
         return false;
     };
@@ -445,30 +333,22 @@ fn add_friend(user: &MessageUser, friend: &str) -> bool
         return false;
     }
     udata.friends.push(friend);
-    match update_user_data(&udata)
-    {
-        Ok(_) => return true,
-        Err(_) => return false
-    }
+    Account::update_account(&udata).is_ok()
     // TODO: blocklist? not necessary right now though.
 }
 
 
-fn remove_friend(user: &MessageUser, friend: &str) -> bool
+fn remove_friend(user: &Account, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
-    let mut udata: MessageUser = retrieve_user_data(&user.username).unwrap();
+    let mut udata: Account = Account::get_account(&user.username).unwrap();
     // shouldn't be any need to check if the friend exists, because that should have been checked when the friend was added.
     if !udata.friends.contains(&friend)
     {
         return false;
     }
     udata.friends.retain(|x| x != &friend);
-    match update_user_data(&udata)
-    {
-        Ok(_) => return true,
-        Err(_) => return false
-    }
+    Account::update_account(&udata).is_ok()
 }
 
 
@@ -478,9 +358,9 @@ fn remove_friend(user: &MessageUser, friend: &str) -> bool
 //                                              //
 //----------------------------------------------//
 
-pub fn init(profile: &Profile)
+pub fn init(account: &Account)
 {
-    if let Some(user) = retrieve_user_data(&profile.username)
+    if let Some(user) = Account::get_account(&account.username)
     {
         draw_home_ui(&user);
         // &user is passed around like herpes. May be a better way to store it.

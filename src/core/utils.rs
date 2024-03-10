@@ -11,8 +11,7 @@ use std::io::{self, Write};
 pub enum Position
 {
     Center,
-    Left,
-    Right
+    // Left and right can be implemented in the future
 }
 
 pub fn addl_message(message: &str, color: &str)
@@ -36,7 +35,7 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
         {
             let rng: isize = (length as isize) - (string_length as isize); // thanks rust for not letting me subtract from a usize!
             let mut temp_str: String = String::new();
-            let rng: f64 = rng as f64 / 2 as f64;
+            let rng: f64 = rng as f64 / 2_f64;
             let wall_char = dotenv::var("UI_WALL_CHAR")
                 .unwrap()
                 .parse::<char>()
@@ -55,20 +54,6 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
             }
             temp_str.push(wall_char);
             string = temp_str;
-        }
-        Position::Left =>
-        {
-            for _ in 0..length
-            {
-                string.push(' ');
-            }
-        }
-        Position::Right =>
-        {
-            for _ in 0..length
-            {
-                string.insert(0, ' ');
-            }
         }
     }
     string
@@ -91,7 +76,7 @@ pub fn grab_str_input(msg: Option<&str>) -> String
 
 pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, String)
 {
-    valid_options.sort_by(|a, b| a.len().cmp(&b.len()));
+    valid_options.sort_by_key(|a| a.len());
     // sort this by length so that things with flags get read first.
     loop
     {
@@ -121,9 +106,9 @@ pub fn create_ui(text: &Vec<String>, position: Position)
         .parse::<char>()
         .unwrap();
     let ui_width: usize = {
-        let mut t: Vec<String> = Vec::clone(&text);
+        let mut t: Vec<String> = Vec::clone(text);
         // make a copy of the text variable because it needs to be altered for finding the largest string.
-        t.sort_by(|a, b| a.len().cmp(&b.len()));
+        t.sort_by_key(|a| a.len());
         t.reverse();
         if dotenv::var("UI_DYNAMIC").unwrap() == "true"
         {
@@ -155,5 +140,5 @@ pub fn rand_hex() -> String
 {
     let mut bytes = [0; 4];
     rand::thread_rng().fill_bytes(&mut bytes);
-    hex::encode(&bytes)
+    hex::encode(bytes)
 }
