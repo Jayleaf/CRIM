@@ -5,8 +5,8 @@ File of public utility functions that may need to be used on many programs. Don'
 */
 
 use colored::Colorize;
-use std::io::{self, Write};
 use rand::RngCore;
+use std::io::{self, Write};
 
 pub enum Position
 {
@@ -37,7 +37,10 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
             let rng: isize = (length as isize) - (string_length as isize); // thanks rust for not letting me subtract from a usize!
             let mut temp_str: String = String::new();
             let rng: f64 = rng as f64 / 2 as f64;
-            let wall_char = dotenv::var("UI_WALL_CHAR").unwrap().parse::<char>().unwrap();
+            let wall_char = dotenv::var("UI_WALL_CHAR")
+                .unwrap()
+                .parse::<char>()
+                .unwrap();
             temp_str.push(wall_char);
             // debug print!("{}", string_length);
             for _ in 0..rng as usize
@@ -79,7 +82,9 @@ pub fn grab_str_input(msg: Option<&str>) -> String
         println!("{}", msg);
     }
     io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input).expect("Failed to read line.");
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line.");
     input = String::from(input.trim());
     input
 }
@@ -95,7 +100,9 @@ pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, Str
         {
             println!("{}", msg);
         }
-        std::io::stdin().read_line(&mut input).expect("Failed to read line.");
+        std::io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line.");
         for opt in &valid_options
         {
             if input.starts_with(*opt)
@@ -109,9 +116,11 @@ pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, Str
 
 pub fn create_ui(text: &Vec<String>, position: Position)
 {
-    let floor_char = dotenv::var("UI_FLOOR_CHAR").unwrap().parse::<char>().unwrap();
-    let ui_width: usize = 
-    {
+    let floor_char = dotenv::var("UI_FLOOR_CHAR")
+        .unwrap()
+        .parse::<char>()
+        .unwrap();
+    let ui_width: usize = {
         let mut t: Vec<String> = Vec::clone(&text);
         // make a copy of the text variable because it needs to be altered for finding the largest string.
         t.sort_by(|a, b| a.len().cmp(&b.len()));

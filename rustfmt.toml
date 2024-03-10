@@ -8,3 +8,4 @@ imports_layout = "Horizontal"
 max_width = 200
 struct_lit_width = 200
 trailing_comma = "Never"
+chain_width = 50

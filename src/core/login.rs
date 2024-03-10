@@ -6,11 +6,11 @@ use argon2::Argon2;
 use base64::{engine::general_purpose, Engine as _};
 use getrandom::getrandom;
 use mongodb::bson;
+use openssl::{pkey::PKey, rsa::Rsa, symm::Cipher};
 use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Write;
-use openssl::{pkey::PKey, rsa::Rsa, symm::Cipher};
 /*
 
 This file handles the login system of CRIM.
@@ -32,20 +32,34 @@ pub struct Profile
     pub hash: String,
     pub salt: Vec<u8>,
     pub public_key: Vec<u8>,
-    pub priv_key_enc: Vec<u8>,
+    pub priv_key_enc: Vec<u8>
 }
 
 impl Profile
 {
     fn from_document(doc: bson::Document) -> Profile
     {
-        Profile 
-        {
+        Profile {
             username: doc.get_str("username").unwrap().to_string(),
             hash: doc.get_str("hash").unwrap().to_string(),
-            salt: doc.get_array("salt").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>(),
-            public_key: doc.get_array("public_key").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>(),
-            priv_key_enc: doc.get_array("priv_key_enc").unwrap().iter().map(|x| x.as_i64().unwrap() as u8).collect::<Vec<u8>>(),
+            salt: doc
+                .get_array("salt")
+                .unwrap()
+                .iter()
+                .map(|x| x.as_i64().unwrap() as u8)
+                .collect::<Vec<u8>>(),
+            public_key: doc
+                .get_array("public_key")
+                .unwrap()
+                .iter()
+                .map(|x| x.as_i64().unwrap() as u8)
+                .collect::<Vec<u8>>(),
+            priv_key_enc: doc
+                .get_array("priv_key_enc")
+                .unwrap()
+                .iter()
+                .map(|x| x.as_i64().unwrap() as u8)
+                .collect::<Vec<u8>>()
         }
     }
 }
@@ -67,7 +81,6 @@ pub struct Token
     Login-Specific Utility Functions
 
 */
-
 
 fn validate_login_info(profile_to_be_validated: &Profile) -> Option<bson::Document>
 {
@@ -130,33 +143,31 @@ fn register_profile(addl_message: Option<&str>)
     getrandom(&mut salt).expect("Failed to generate random salt.");
     let mut output: [u8; 256] = [0u8; 256];
     // may be a better way to do this than use .clone()
-    Argon2::default().hash_password_into(&password.clone().into_bytes(), &salt, &mut output).expect("failed to hash password");
+    Argon2::default()
+        .hash_password_into(&password.clone().into_bytes(), &salt, &mut output)
+        .expect("failed to hash password");
     let b64_pass: String = general_purpose::STANDARD.encode(output);
 
     // gen public and private keys
-
-    let rsa: Rsa<openssl::pkey::Private> = Rsa::generate(2048).unwrap();
-    let pkey: PKey<openssl::pkey::Private> = PKey::from_rsa(rsa).unwrap();
-    // private key will be encrypted with the user's password
-
+    let pkey: PKey<openssl::pkey::Private> = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
     let cipher: Cipher = Cipher::aes_256_cbc();
     let public_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
-
     let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
     let mut file = File::create("src/userdata/pkey.key").unwrap(); // could be an env variable as to what pkey.key could be named
-    file.write_all(&private_key).expect("failed to write priv key to pkey.key");
-    
+    file.write_all(&private_key)
+        .expect("failed to write priv key to pkey.key");
+
     // actually encrypt priv key and save it
-    let private_key: Vec<u8> = pkey.private_key_to_pem_pkcs8_passphrase(cipher, &password.as_bytes()).unwrap(); 
+    let private_key: Vec<u8> = pkey
+        .private_key_to_pem_pkcs8_passphrase(cipher, password.as_bytes())
+        .unwrap();
     //https://docs.rs/openssl/latest/openssl/symm/index.html
-    let new_profile: Profile = Profile { username: username, hash: b64_pass, salt: salt.to_vec(), public_key: public_key, priv_key_enc: private_key };
+    let new_profile: Profile = Profile { username, hash: b64_pass, salt: salt.to_vec(), public_key, priv_key_enc: private_key };
     // ^^ this is fat as HELL in the database. 33kb for a single user entry!!! Could compress somehow for strict data limits, but not important atm
-   
-   
+
     /*
         mang- i mean mongo time!
     */
-
 
     utils::clear();
 
@@ -190,7 +201,6 @@ fn register_profile(addl_message: Option<&str>)
     };
 }
 
-
 fn login_upass()
 {
     let mut msg: &str = "";
@@ -198,7 +208,7 @@ fn login_upass()
     loop
     {
         utils::clear();
-        if msg != ""
+        if !msg.is_empty()
         {
             utils::addl_message(msg, "red");
         }
@@ -206,15 +216,19 @@ fn login_upass()
         let password = utils::grab_str_input(Some("Type your password."));
         let coll: mongodb::sync::Collection<bson::Document> = mongo::get_collection("accounts");
         let mut trip: bool = false;
-        let query = coll.find_one(bson::doc! { "username": &username }, None).unwrap();
+        let query = coll
+            .find_one(bson::doc! { "username": &username }, None)
+            .unwrap();
         match query
         {
             Some(doc) =>
             {
                 let profile = Profile::from_document(doc.clone());
                 let mut output: [u8; 256] = [0u8; 256];
-                Argon2::default().hash_password_into(&password.clone().into_bytes(), &profile.salt, &mut output).expect("failed to hash password");
-                let base64_encoded = general_purpose::STANDARD.encode(&output);
+                Argon2::default()
+                    .hash_password_into(&password.clone().into_bytes(), &profile.salt, &mut output)
+                    .expect("failed to hash password");
+                let base64_encoded = general_purpose::STANDARD.encode(output);
 
                 if base64_encoded == profile.hash
                 {
@@ -226,27 +240,28 @@ fn login_upass()
                     )
                     .expect("Failed to write token to file. Please ensure you have a token.json file existing.");
 
-                    let private_key: Vec<u8> = Rsa::private_key_from_pem_passphrase(&profile.priv_key_enc, &password.into_bytes()).unwrap().private_key_to_pem().unwrap();
+                    let private_key: Vec<u8> = Rsa::private_key_from_pem_passphrase(&profile.priv_key_enc, &password.into_bytes())
+                        .unwrap()
+                        .private_key_to_pem()
+                        .unwrap();
                     let mut file = File::create("src/userdata/pkey.key").unwrap();
-                    file.write_all(&private_key).expect("failed to write priv key to pkey.key");
+                    file.write_all(&private_key)
+                        .expect("failed to write priv key to pkey.key");
                     login(&profile);
                     break;
                 }
-                else
-                {
-                    trip = true;
-                }
+                trip = true;
             }
             None =>
             {
-                /* 
+                /*
                 The problem with this is that if an invalid username is entered, the trip variable has already been tripped.
                 This means that if someone was guessing usernames and passwords, they would be able to tell if a username is valid based solely on response time from the program.
                 I don't know if this is a real issue, but it is something to note.
                 */
                 trip = true;
             }
-        }
+        };
         if trip
         {
             msg = "Invalid username or password.";
@@ -260,7 +275,6 @@ fn login(p: &Profile)
     validate_login_info(p);
     messenger::init(p);
 }
-
 
 pub fn login_init()
 {

@@ -1,13 +1,20 @@
-use super::{login, message_relay::{self, receive_messages, Conversation}, mongo, utils};
+use super::{
+    login, message_relay::{self, receive_messages, Conversation, RawMessage}, mongo, utils
+};
 use colored::Colorize;
 use login::Profile;
-use mongodb::{bson::{doc, to_document, Document}, sync::Collection};
+use mongodb::bson::{doc, to_document, Document};
 use serde::Deserialize;
 use serde::Serialize;
-use std::{fs::File, io::Write, time::{self, SystemTime}};
 use std::io::BufWriter;
 use std::vec;
-use openssl::pkey::PKey;
+use std::fs::File;
+
+//----------------------------------------------//
+//                                              //
+//          Structs & Implementations           //
+//                                              //
+//----------------------------------------------//
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct MessageUser
@@ -17,7 +24,6 @@ pub struct MessageUser
     friends: Vec<String> // this is going to be a vector of usernames
 }
 
-
 impl MessageUser
 {
     fn from_document(doc: Document) -> Self
@@ -25,19 +31,28 @@ impl MessageUser
         MessageUser {
             token: doc.get_str("token").unwrap().to_string(),
             username: doc.get_str("username").unwrap().to_string(),
-            friends: doc.get_array("friends").unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect()
+            friends: doc
+                .get_array("friends")
+                .unwrap()
+                .iter()
+                .map(|x| x.as_str().unwrap().to_string())
+                .collect()
         }
     }
 }
 
-/*
-|
-|               Front-End Functions
-|
-=====================================================*/
+//----------------------------------------------//
+//                                              //
+//            Front-End UI Functions            //
+//                                              //
+//----------------------------------------------//
 
-pub fn draw_home(user: &MessageUser)
+pub fn draw_home_ui(user: &MessageUser)
 {
+    /*
+    Draws the home page for the messenger. This is the first page the user sees when they log in.
+    */
+
     utils::clear();
     let welcome_message: String = format!("Welcome, {}.", &user.username);
     let ui: Vec<String> = vec![
@@ -58,12 +73,12 @@ pub fn draw_home(user: &MessageUser)
         "msg" =>
         {
             utils::clear();
-            draw_msg(user);
+            draw_messenger_home_ui(user);
         }
         "manage" =>
         {
             utils::clear();
-            draw_friend_mgmt(user);
+            draw_friend_mgmt_ui(user);
         }
         "logout" =>
         {
@@ -75,20 +90,21 @@ pub fn draw_home(user: &MessageUser)
 
             login::login_init();
         }
-        _ =>
-        {
-            // this should never run, because get_opt checks for all cases.
-            panic!("get_opt failed.")
-        }
+        _ => {}
     }
 }
 
-pub fn draw_friend_mgmt(user: &MessageUser)
+
+pub fn draw_friend_mgmt_ui(user: &MessageUser)
 {
+    /*
+    Draws the friend management panel, where users can add/remove friends.
+    */
     let user: MessageUser = retrieve_user_data(&user.username).unwrap(); // the user arg can be trusted to have a proper username but not proper friends.
     let friends: &Vec<String> = &user.friends;
     let mut ui: Vec<String> = vec!["Friends Management".to_string(), "".to_string(), "".to_string()];
-    for friend in friends {
+    for friend in friends
+    {
         ui.push(friend.to_string());
     }
     ui.push("".to_string());
@@ -107,13 +123,13 @@ pub fn draw_friend_mgmt(user: &MessageUser)
             {
                 utils::clear();
                 utils::addl_message("Successfully added friend.", "green");
-                draw_friend_mgmt(&user);
+                draw_friend_mgmt_ui(&user);
             }
             else
             {
                 utils::clear();
                 utils::addl_message(format!("User {} does not exist, or you already have them added.", friend.blue()).as_str(), "red");
-                draw_friend_mgmt(&user);
+                draw_friend_mgmt_ui(&user);
             }
         }
         "rm" =>
@@ -123,52 +139,46 @@ pub fn draw_friend_mgmt(user: &MessageUser)
             if remove_friend(&user, friend)
             {
                 utils::addl_message("Successfully removed friend.", "green");
-                draw_friend_mgmt(&user);
+                draw_friend_mgmt_ui(&user);
             }
             else
             {
                 utils::addl_message(format!("User {} does not exist, or you don't have them added.", friend.blue()).as_str(), "red");
-                draw_friend_mgmt(&user);
+                draw_friend_mgmt_ui(&user);
             }
         }
         "back" =>
         {
-            draw_home(&user);
+            draw_home_ui(&user);
         }
-        _ =>
-        {
-            utils::clear();
-            draw_friend_mgmt(&user);
-        }
+        _ => {}
     }
 }
 
-fn draw_convo_ui (user: &MessageUser)
+
+fn draw_convo_list_ui(user: &MessageUser)
 {
-    // this function will draw the conversation panel
-    // it will be a placeholder for now
-    let mut ui: Vec<String> = vec!
-    [
-        "Conversations".to_string(), 
-        "".to_string(), 
-        "open <id> : open a conversation".to_string(), 
+    /*
+    Draws the direct conversation panel, which lists all the conversations the user is a part of.
+    User can go back with the back command, or open a conversation with a given ID.
+    */
+
+    let mut ui: Vec<String> = vec![
+        "Conversations".to_string(),
+        "".to_string(),
+        "open <id> : open a conversation".to_string(),
         "back : return to message panel".to_string(),
-        "".to_string()
+        "".to_string(),
     ];
-    let conversations: mongodb::sync::Cursor<Document> = mongo::get_collection("conversations").find(None, None).unwrap();
-    for convo in conversations
-    {
-        let convo: Conversation = Conversation::from_document(convo.unwrap());
-        // idk how to do a .find or a .any in a filter for .find
-        if convo.users.contains(&user.username)
-        {
-            let users = convo.users.join(", ");
-            let id = convo.id;
-            let string = format!("{} : {}", id, users);
-            ui.push(string);
-        }
-        
-    }
+    let conversations: mongodb::sync::Cursor<Document> = mongo::get_collection("conversations")
+        .find(doc!("users": &user.username), None)
+        .unwrap();
+    let conversation_strings: Vec<String> = conversations.into_iter()
+        .map(|x| Conversation::from_document(&x.unwrap()))
+        .map(|y| format!("{} : {}", y.id, y.users.join(", ")))
+        .collect();
+    ui.extend(conversation_strings);
+    
     utils::create_ui(&ui, utils::Position::Center);
     let opt = utils::grab_opt(None, vec!["open", "back"]);
     match opt.0.as_str()
@@ -179,59 +189,63 @@ fn draw_convo_ui (user: &MessageUser)
             {
                 Ok(convos) =>
                 {
-                    let convos = convos.into_iter().map(|x| x.unwrap()).collect::<Vec<Document>>();
-                    if convos.len() == 0
+                    let convos = convos
+                        .into_iter()
+                        .map(|x| x.unwrap())
+                        .collect::<Vec<Document>>();
+                    if convos.is_empty()
                     {
                         utils::clear();
                         utils::addl_message("Conversation does not exist.", "red");
-                        draw_convo_ui(&user);
+                        draw_convo_list_ui(user);
                     }
                     // jerry rigged af
-                    let convo = Conversation::from_document(convos.get(0).unwrap().clone());
-                    draw_messenger_ui(&user, &convo);
+                    let convo = Conversation::from_document(convos.first().unwrap());
+                    draw_messenger_ui(user, &convo);
                 }
                 Err(_) =>
                 {
                     utils::clear();
                     utils::addl_message("Failed to retrieve conversation data.", "red");
-                    draw_convo_ui(&user);
+                    draw_convo_list_ui(user);
                 }
             }
         }
         "back" =>
         {
             utils::clear();
-            draw_msg(&user);
+            draw_messenger_home_ui(user);
         }
-        _ =>
-        {
-            draw_convo_ui(&user);
-        }
+        _ => {}
     }
 }
 
 fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
 {
+    /*
+    The actual messenger UI. This is where the user can send and receive messages.
+    */
     loop
     {
-        let mut ui: Vec<String> = vec![
+        let mut ui: Vec<String> = vec!
+        [
             "Messenger".to_string(),
             "".to_string(),
-            "".to_string(),
+            "".to_string()
         ];
-
-        // TODO: handle this better
-        
-        let messages: Vec<message_relay::Message> = receive_messages(convo.id.as_str()).unwrap();
+        let messages: Vec<RawMessage> = receive_messages(convo.id.as_str()).unwrap();
         for message in messages
         {
             let messagecontent: String = String::from_utf8(message.message).unwrap();
             // would be cool to color username but it adds hidden characters, maybe work around it
-            let message: String = format!("{}: {}", message.sender, messagecontent).as_str().trim().to_string();
+            let message: String = format!("{}: {}", message.sender, messagecontent)
+                .as_str()
+                .trim()
+                .to_string();
             println!("{}", message.len());
             ui.push(message);
         }
-        
+
         ui.push("".to_string());
         ui.push("send <message> : send a message".to_string());
         ui.push("back : return to conversation list".to_string());
@@ -241,29 +255,31 @@ fn draw_messenger_ui(user: &MessageUser, convo: &Conversation)
         {
             "send" =>
             {
-                let message = message_relay::Message { sender: user.username.clone(), message: opt.1.as_bytes().to_vec(), time: chrono::offset::Local::now().to_string() };
+                let message = RawMessage
+                { 
+                    sender: user.username.clone(), 
+                    message: opt.1.as_bytes().to_vec(), 
+                    time: chrono::offset::Local::now().to_string()
+                };
                 message_relay::upload_message(message, &convo.id, &user.username).expect("failed to upload message");
                 draw_messenger_ui(user, convo)
             }
             "back" =>
             {
                 utils::clear();
-                draw_convo_ui(user);
+                draw_convo_list_ui(user);
             }
-            _ =>
-            {
-                utils::clear();
-                draw_messenger_ui(user, convo);
-            }
+            _ => {}
         }
-    
     }
 }
 
-
-fn draw_msg(user: &MessageUser)
+fn draw_messenger_home_ui(user: &MessageUser)
 {
-    //TODO: exit option
+    /*
+    Draws the messenger home UI, which will let users start conversations or view the ones they're a part of.
+    */
+
     let user: MessageUser = retrieve_user_data(&user.username).unwrap();
     let friends: &Vec<String> = &user.friends;
     let ui: Vec<String> = vec![
@@ -277,7 +293,6 @@ fn draw_msg(user: &MessageUser)
         "back : return to home page.".to_string(),
     ];
     utils::create_ui(&ui, utils::Position::Center);
-    // flags aren't dynamic. I could fix that at some point but it's unnecessary right now.
     let opt: (String, String) = utils::grab_opt(None, vec!["new", "new --multi", "open", "back"]);
     match opt.0.as_str()
     {
@@ -289,13 +304,13 @@ fn draw_msg(user: &MessageUser)
                 println!("Opening a new conversation with {}", friend.blue());
                 super::message_relay::create_conversation(vec![user.username.clone(), friend.to_string()]);
                 utils::clear();
-                draw_convo_ui(&user)
+                draw_convo_list_ui(&user)
             }
             else
             {
                 utils::clear();
                 utils::addl_message(format!("You don't have {} added as a friend.", friend.blue()).as_str(), "red");
-                draw_msg(&user);
+                draw_messenger_home_ui(&user);
             }
         }
         "new --multi" =>
@@ -308,7 +323,7 @@ fn draw_msg(user: &MessageUser)
                 {
                     utils::clear();
                     utils::addl_message(format!("You don't have {} added as a friend.", friend.blue()).as_str(), "red");
-                    draw_msg(&user);
+                    draw_messenger_home_ui(&user);
                     return;
                 }
             }
@@ -318,20 +333,24 @@ fn draw_msg(user: &MessageUser)
         "open" =>
         {
             //utils::clear();
-            draw_convo_ui(&user);
+            draw_convo_list_ui(&user);
         }
         "back" =>
         {
             utils::clear();
-            draw_home(&user);
+            draw_home_ui(&user);
         }
-        _ =>
-        {
-            utils::clear();
-            draw_msg(&user);
-        }
+        _ => {}
     }
 }
+
+
+//---------------------------------------------------------------------//
+//                                                                     //
+//                         Back-End Functions                          //
+//(messenger specific back-end functions are found in message_relay.rs)//
+//                                                                     //
+//---------------------------------------------------------------------//
 
 pub fn create_user(profile: &login::Profile) -> MessageUser
 {
@@ -342,10 +361,17 @@ pub fn create_user(profile: &login::Profile) -> MessageUser
     let user: MessageUser = {
         match account_collection.find_one(doc! { "username": &profile.username }, None)
         {
-            Ok(Some(unwrapped_collection)) =>
-            {
-                MessageUser { token: unwrapped_collection.get_object_id("_id").unwrap().to_string(), username: unwrapped_collection.get_str("username").unwrap().to_string(), friends: Vec::new() }
-            }
+            Ok(Some(unwrapped_collection)) => MessageUser {
+                token: unwrapped_collection
+                    .get_object_id("_id")
+                    .unwrap()
+                    .to_string(),
+                username: unwrapped_collection
+                    .get_str("username")
+                    .unwrap()
+                    .to_string(),
+                friends: Vec::new()
+            },
             Err(_) =>
             {
                 panic!("Tried to create a user with an invalid profile.")
@@ -357,15 +383,12 @@ pub fn create_user(profile: &login::Profile) -> MessageUser
         }
     };
     let doc = to_document(&serde_json::to_value(&user).unwrap());
-    user_collection.insert_one(doc.unwrap(), None).expect("Failed to create a new messageuser in the db.");
+    user_collection
+        .insert_one(doc.unwrap(), None)
+        .expect("Failed to create a new messageuser in the db.");
     user
 }
 
-/*
-|
-|       Back-End Functions
-|
-=========================================*/
 
 fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
 {
@@ -391,6 +414,7 @@ fn update_user_data(user: &MessageUser) -> Result<MessageUser, ()>
     }
 }
 
+
 fn retrieve_user_data(username: &str) -> Option<MessageUser>
 {
     // This function will retrieve the user's data from the database and return it as a MessageUser. Ideally, don't do this often, because you don't want to spam the db.
@@ -406,6 +430,7 @@ fn retrieve_user_data(username: &str) -> Option<MessageUser>
         Err(_) => return None
     };
 }
+
 
 fn add_friend(user: &MessageUser, friend: &str) -> bool
 {
@@ -428,6 +453,7 @@ fn add_friend(user: &MessageUser, friend: &str) -> bool
     // TODO: blocklist? not necessary right now though.
 }
 
+
 fn remove_friend(user: &MessageUser, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
@@ -445,11 +471,19 @@ fn remove_friend(user: &MessageUser, friend: &str) -> bool
     }
 }
 
+
+//----------------------------------------------//
+//                                              //
+//                Initialization                //
+//                                              //
+//----------------------------------------------//
+
 pub fn init(profile: &Profile)
 {
     if let Some(user) = retrieve_user_data(&profile.username)
     {
-        draw_home(&user);
+        draw_home_ui(&user);
+        // &user is passed around like herpes. May be a better way to store it.
     }
     else
     {
