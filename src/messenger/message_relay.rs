@@ -141,13 +141,11 @@ impl Conversation
 //                                              //
 //----------------------------------------------//
 
+/// Creates a conversation object and uploads it to the database.
+/// The conversation ID contains a unique conversation ID, encrypted with each user's public key. 
+/// For more information, see the diagram in readme.md.
 pub fn create_conversation(users: Vec<String>)
 {
-    /*
-    Creates a conversation object and uploads it to the database.
-    The conversation ID contains a unique conversation ID, encrypted with each user's public key.
-    For more information, see the diagram in readme.md.
-    */
 
     let mut raw_conversation_key: [u8; 128] = [0; 128];
     getrandom(&mut raw_conversation_key).expect("Failed to generate random conversation key.");
@@ -173,11 +171,11 @@ pub fn create_conversation(users: Vec<String>)
 //                                              //
 //----------------------------------------------//
 
+/// Encrypts a RawMessage value with the conversation's unique key, and returns an EncryptedMessage value.
+/// 
+/// Gets the conversation key from the conversation value that corresponds to the recipient, decrypts it with the sender's private key, serializes the RawMessage, re-encrypts it with the decrypted conversation key, and returns an EncryptedMessage value.
 fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessage
 {
-    /*
-    Encrypts a message object. For more info as to how this function works, see the diagram in readme.md.
-    */
 
     // first, get the public-key encrypted conversation key that belongs to the other user (will need to be refactored big time for multiple users)
     let mut convokey: UserKey = convo
@@ -207,12 +205,11 @@ fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessa
     EncryptedMessage { data: encrypted_message_struct }
 }
 
+/// Uploads a RawMessage to a conversation in the database.* This is the entry point for sending a message, as `encrypt()` shouldn't be called directly.
+/// 
+/// *Actually replaces an existing conversation entry with a new one containing the new message, because `update_one()` was a pain in my ass.
 pub fn upload_message(message: &RawMessage, convo_id: &str) -> Result<(), String>
 {
-    /*
-    Encrypt message with the other user's public key, and upload it to the conversation stored in the db.
-    */
-
     match mongo::get_collection("conversations").find_one(Some(doc! {"id": convo_id}), None)
     {
         Ok(convo) => match convo
@@ -220,7 +217,6 @@ pub fn upload_message(message: &RawMessage, convo_id: &str) -> Result<(), String
             Some(doc) =>
             {
                 let mut conversation: Conversation = Conversation::from_document(&doc);
-                // encrypt given message
                 let message: EncryptedMessage = encrypt_message(message, &conversation);
                 conversation.messages.push(message);
                 let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
@@ -242,6 +238,7 @@ pub fn upload_message(message: &RawMessage, convo_id: &str) -> Result<(), String
 //                                              //
 //----------------------------------------------//
 
+/// Takes in a reference to an EncryptedMessage value and a private key ref, and spits out a RawMessage decrypted with the provided private key.
 fn decrypt_message(encrypted_message: &EncryptedMessage, private_key: &Rsa<Private>) -> RawMessage
 {
     /*
@@ -259,13 +256,12 @@ fn decrypt_message(encrypted_message: &EncryptedMessage, private_key: &Rsa<Priva
     serde_json::from_str(&raw_str).unwrap()
 }
 
+/// Takes in a conversation ID and returns a Result, either containing a Vec of RawMessages containing all decrypted messages, or a string if no messages were present in the conversation.
+///
+/// Finds a conversation matching the conversation id, reads the user's private key from pkey.key, and decrypts all messages in the conversation value.
+
 pub fn receive_messages(convo_id: &str) -> Result<Vec<RawMessage>, String>
 {
-    /*
-    Returns a vector of decrypted messages, decrypted using the locally stored private key in pkey.key.
-    This is the umbrella function called in messenger.rs to load all messages from a conversation.
-    */
-
     match mongo::get_collection("conversations").find_one(Some(doc! {"id": convo_id}), None)
     {
         Ok(convo) => match convo
@@ -276,10 +272,7 @@ pub fn receive_messages(convo_id: &str) -> Result<Vec<RawMessage>, String>
                 let mut messages: Vec<RawMessage> = vec![];
                 let key: String = fs::read_to_string("src/userdata/pkey.key").expect("failed to open key file");
                 let key = Rsa::private_key_from_pem(key.as_bytes()).unwrap();
-                for message in conversation.messages.iter()
-                {
-                    messages.push(decrypt_message(message, &key));
-                }
+                messages.extend(conversation.messages.iter().map(|x| decrypt_message(x, &key)));
                 Ok(messages)
             }
             None => Err("conversation not found".to_string())

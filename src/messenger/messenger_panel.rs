@@ -17,12 +17,9 @@ use std::fs::File;
 //                                              //
 //----------------------------------------------//
 
+/// Draws the home page for the messenger. This is the first page the user sees when they log in.
 pub fn draw_home_ui(user: &Account)
 {
-    /*
-    Draws the home page for the messenger. This is the first page the user sees when they log in.
-    */
-
     utils::clear();
     let welcome_message: String = format!("Welcome, {}.", &user.username);
     let ui: Vec<String> = vec![
@@ -60,12 +57,9 @@ pub fn draw_home_ui(user: &Account)
     }
 }
 
-
+/// Draws the friend management panel UI. User can add or remove friends here.
 pub fn draw_friend_mgmt_ui(user: &Account)
 {
-    /*
-    Draws the friend management panel, where users can add/remove friends.
-    */
     let user: Account = Account::get_account(&user.username).unwrap(); // the user arg can be trusted to have a proper username but not proper friends.
     let friends: &Vec<String> = &user.friends;
     let mut ui: Vec<String> = vec!["Friends Management".to_string(), "".to_string(), "".to_string()];
@@ -121,7 +115,8 @@ pub fn draw_friend_mgmt_ui(user: &Account)
     }
 }
 
-
+/// Draws the list of conversations that the user is an active participant in.
+// TODO: add a way to leave conversations
 fn draw_convo_list_ui(user: &Account)
 {
     /*
@@ -186,6 +181,7 @@ fn draw_convo_list_ui(user: &Account)
     }
 }
 
+/// Draws the actual messenger UI where users send and receive messages.
 fn draw_messenger_ui(user: &Account, convo: &Conversation)
 {
     /*
@@ -240,6 +236,7 @@ fn draw_messenger_ui(user: &Account, convo: &Conversation)
     }
 }
 
+/// Draws the home UI for the messenger, where users can open new conversations or view existing ones.
 fn draw_messenger_home_ui(user: &Account)
 {
     /*
@@ -319,7 +316,7 @@ fn draw_messenger_home_ui(user: &Account)
 //---------------------------------------------------------------------//
 
 
-
+/// Adds a friend (username string) to the friends array on the user's account. Returns true if successful, false if not.
 fn add_friend(user: &Account, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
@@ -337,7 +334,7 @@ fn add_friend(user: &Account, friend: &str) -> bool
     // TODO: blocklist? not necessary right now though.
 }
 
-
+/// Removes a friend (username string) from the friends array on the user's account. Returns true if successful, false if not.
 fn remove_friend(user: &Account, friend: &str) -> bool
 {
     let friend: String = String::from(friend);
@@ -358,6 +355,7 @@ fn remove_friend(user: &Account, friend: &str) -> bool
 //                                              //
 //----------------------------------------------//
 
+/// Initializes the messenger panel with a given account.
 pub fn init(account: &Account)
 {
     if let Some(user) = Account::get_account(&account.username)

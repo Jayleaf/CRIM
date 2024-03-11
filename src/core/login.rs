@@ -27,13 +27,12 @@ fn validate_login_info(account_to_be_validated: &Account) -> Option<Account>
 |
 ====================================================*/
 
+/// Registers a new account in the database
+/// Username uniquity is enforced, and usernames cannot currently be changed, because the friend system relies on usernames.
+/// 
+/// Could be refactored to use UUIDs instead of usernames to allow for username changing, but i still think uniquity makes things clearer for everyone.
 fn register_account(addl_message: Option<&str>)
 {
-    /*
-    Registers a new account in the database. Username uniquity is enforced, and usernames cannot currently be changed, because the friend system relies on usernames.
-    Could be refactored to use UUIDs instead of usernames to allow for username changing, but i still think uniquity makes things clearer for everyone.
-    */
-
     if let Some(msg) = addl_message
     {
         // hard-code red because if this function succeeds everything is cleared anyway. only errors need to be shown
@@ -99,6 +98,7 @@ fn register_account(addl_message: Option<&str>)
     };
 }
 
+/// Logs a user in with a username and password
 fn login_upass()
 {
     let mut msg: &str = "Type \"back\" to leave.";
@@ -153,12 +153,14 @@ fn login_upass()
     }
 }
 
+/// Transporter to the messenger class
 fn login(p: &Account)
 {
     validate_login_info(p);
     messenger_panel::init(p);
 }
 
+/// Runs when the program's first started. Presents the user with options to create an account, login, or leave.
 pub fn login_init()
 {
     utils::clear();

@@ -14,18 +14,20 @@ pub enum Position
     // Left and right can be implemented in the future
 }
 
+/// Prints a message.
 pub fn addl_message(message: &str, color: &str)
 {
     println!("{}", message.color(color));
 }
 
+/// Clears terminal
 pub fn clear()
 {
-    // clear console without having to type out that nasty stuff. Used to print a logo before UI change.
     print!("\x1b[2J");
 }
 
-pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
+/// Formats a string to be usable in the UI. Internal function used by `create_ui()`
+fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
 {
     let mut string: String = String::from(string);
     let string_length: usize = string.len();
@@ -59,6 +61,13 @@ pub fn format_string_ui(string: &str, length: usize, pos: &Position) -> String
     string
 }
 
+/// Grab a string input.
+/// 
+/// Ex: 
+/// ```rust
+/// let input: String = utils::grab_str_input(Some("Enter your username: "));
+/// println!("You entered: {}", input);
+/// ```
 pub fn grab_str_input(msg: Option<&str>) -> String
 {
     let mut input: String = String::new();
@@ -74,6 +83,17 @@ pub fn grab_str_input(msg: Option<&str>) -> String
     input
 }
 
+/// Grab an option input.
+/// 
+/// Ex:
+/// ```rust
+/// let opt: (String, String) = utils::grab_opt("Enter an action:", vec!["-a", "-b", "-c"]);
+/// match opt.0.as_str()
+/// {
+///    "-a" => println!("You chose option A!"),
+///    "-b" => println!("You chose option B!"),
+///    "-c" => println!("You chose option C!")
+/// }
 pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, String)
 {
     valid_options.sort_by_key(|a| a.len());
@@ -99,6 +119,7 @@ pub fn grab_opt(msg: Option<&str>, mut valid_options: Vec<&str>) -> (String, Str
     }
 }
 
+/// Creates a UI from a given vector of strings. Stacked vertically.
 pub fn create_ui(text: &Vec<String>, position: Position)
 {
     let floor_char = dotenv::var("UI_FLOOR_CHAR")
@@ -136,6 +157,7 @@ pub fn create_ui(text: &Vec<String>, position: Position)
     println!("{}", format_string_ui(&title, ui_width, &position));
 }
 
+/// Outputs a random hexadecimal from 4 bytes.
 pub fn rand_hex() -> String
 {
     let mut bytes = [0; 4];

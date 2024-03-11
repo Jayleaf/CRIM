@@ -29,6 +29,7 @@ pub struct Account
 
 impl Account
 {
+    /// Parses a BSON Document into an account value
     pub fn from_document(doc: bson::Document) -> Account
     {
         Account {
@@ -61,6 +62,7 @@ impl Account
         }
     }
 
+    /// Takes in a string, finds the matching account in the database, and returns it. Will return none if no account is found, or will panic if it fails to access a database.
     pub fn get_account(username: &String) -> Option<Account>
     {
         let doc = mongo::get_collection("accounts").find(
@@ -81,11 +83,9 @@ impl Account
         }
     }
 
+    /// Takes in an account value reference, and updates the first database entry with the same username. If the update is successful, it will return the account. If not, it will return an error. Most errors from this will likely be from trying to update a non-existent account.
     pub fn update_account(new: &Account) -> Result<Account, mongodb::error::Error>
     {
-        /*
-        Takes in an account and if it updates successfully, will return the new updated account. If not, returns an error.
-        */
         let result = mongo::get_collection("accounts").update_one(
             bson::doc! { "username": &new.username },
             bson::doc! { "$set": bson::to_document(&new).unwrap() },
@@ -109,6 +109,7 @@ impl Account
         }
     } 
 
+    /// Finds the first instance of a database account entry with a given username, and removes it. Returns an empty result.
     pub fn delete_account(username: &String) -> Result<(), mongodb::error::Error>
     {
         match mongo::get_collection("accounts").delete_one(
@@ -121,6 +122,7 @@ impl Account
         }
     }
 
+    /// Creates a new account entry from a given account value ref. Returns the account if successful, or an error if not. Most errors from this will be from faults in database setup.
     pub fn create_account(new: &Account) -> Result<Account, mongodb::error::Error>
     {
         let result = mongo::get_collection("accounts").insert_one(
