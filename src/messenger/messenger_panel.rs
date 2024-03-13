@@ -30,11 +30,12 @@ pub fn draw_home_ui(user: &Account)
         "Please select an option.".to_string(),
         "".to_string(),
         "msg : opens the message panel".to_string(),
-        "manage : manage your friends".to_string(),
+        "friends : manage your friends".to_string(),
+        "manage : manage your account".to_string(),
         "logout : log out of your account.".to_string(),
     ];
     utils::create_ui(&ui, utils::Position::Center);
-    let opt: (String, String) = utils::grab_opt(None, vec!["msg", "manage", "logout"]);
+    let opt: (String, String) = utils::grab_opt(None, vec!["msg", "friends", "manage", "logout"]);
     match opt.0.as_str()
     {
         "msg" =>
@@ -42,10 +43,15 @@ pub fn draw_home_ui(user: &Account)
             utils::clear();
             draw_messenger_home_ui(user);
         }
-        "manage" =>
+        "friends" =>
         {
             utils::clear();
             draw_friend_mgmt_ui(user);
+        }
+        "manage" =>
+        {
+            utils::clear();
+            manage_account_ui(&user);
         }
         "logout" =>
         {
@@ -307,7 +313,10 @@ fn draw_messenger_home_ui(user: &Account)
     }
 }
 
-
+fn manage_account_ui(user: &Account)
+{
+    // TODO: user authentication not proper, so nothing here would be secure yet.
+}
 //---------------------------------------------------------------------//
 //                                                                     //
 //                         Back-End Functions                          //
