@@ -29,7 +29,7 @@ pub struct RawMessage
 }
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct UserKey
 {
     owner: String,
@@ -59,8 +59,10 @@ impl UserKey
             .expect("failed to encrypt key");
         UserKey { owner: user.clone(), key: encrypted_key }
     }
-    fn decrypt(&mut self, encrypted_key: Vec<u8>, priv_key: Rsa<Private>) -> UserKey
+    fn decrypt(&self, encrypted_key: &[u8]) -> UserKey
     {
+        let priv_key: String = fs::read_to_string("src/userdata/pkey.key").expect("failed to open key file");
+        let priv_key: Rsa<Private> = Rsa::private_key_from_pem(priv_key.as_bytes()).expect("failed to parse private key");
         let mut decrypted_key: Vec<u8> = vec![0; priv_key.size() as usize];
         priv_key
             .private_decrypt(&encrypted_key, &mut decrypted_key, Padding::PKCS1)
@@ -133,6 +135,20 @@ impl Conversation
             .collect();
         Conversation { id, users, messages, keys }
     }
+
+    pub fn get(id: &str) -> Option<Conversation>
+    {
+        let doc: Option<Document> = mongo::get_collection("conversations")
+            .find_one(Some(doc! {"id": id}), None)
+            .unwrap();
+        match doc
+        {
+            Some(doc) => Some(Conversation::from_document(&doc)),
+            None => None
+        }
+        
+    
+    }
 }
 
 //----------------------------------------------//
@@ -177,29 +193,20 @@ pub fn create_conversation(users: Vec<String>)
 fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessage
 {
 
-    // first, get the public-key encrypted conversation key that belongs to the other user (will need to be refactored big time for multiple users)
-    let mut convokey: UserKey = convo
+    // first, get the public-key encrypted conversation key that belongs to you
+    let convokey: UserKey = convo
         .keys
         .iter()
-        .find(|x| x.owner != message.sender.as_str())
+        .find(|x| x.owner == message.sender.as_str())
         .unwrap()
         .clone();
 
     // then, decrypt that with your private key
-    let priv_key: String = fs::read_to_string("src/userdata/pkey.key")
-        .expect("There was a problem reading your private key from pkey.key.");
-    let priv_key: Rsa<Private> = Rsa::private_key_from_pem(priv_key.as_bytes())
-        .expect("There was a problem parsing the private key in pkey.key.");
-    let mut decrypted_convo_key: Vec<u8> = vec![0; priv_key.size() as usize];
-    priv_key
-        .private_decrypt(convokey.key.as_slice(), &mut decrypted_convo_key, Padding::PKCS1)
-        .expect("failed to decrypt convo key");
-    convokey.key = decrypted_convo_key.to_vec();
-
+    let decrypted_key: Vec<u8> = UserKey::decrypt(&convokey, &convokey.key).key.as_slice().to_vec();
     // now, serialize the message payload, encrypt that serialized payload, and return the encrypted message object.
     let serialized_message: String = serde_json::to_string(&message).unwrap();
-    let cipher: symm::Cipher = symm::Cipher::aes_256_cbc();
-    let encrypted_message_struct: Vec<u8> = symm::encrypt(cipher, convokey.key.as_slice(), None, serialized_message.as_bytes()).unwrap();
+    let cipher: symm::Cipher = symm::Cipher::aes_128_cbc();
+    let encrypted_message_struct: Vec<u8> = symm::encrypt(cipher, &decrypted_key, None, serialized_message.as_bytes()).unwrap();
 
     // TODO: you stopped here. start to decrypt the messages next.
     EncryptedMessage { data: encrypted_message_struct }
@@ -210,25 +217,20 @@ fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessa
 /// *Actually replaces an existing conversation entry with a new one containing the new message, because `update_one()` was a pain in my ass.
 pub fn upload_message(message: &RawMessage, convo_id: &str) -> Result<(), String>
 {
-    match mongo::get_collection("conversations").find_one(Some(doc! {"id": convo_id}), None)
+    match Conversation::get(convo_id)
     {
-        Ok(convo) => match convo
-        {
-            Some(doc) =>
-            {
-                let mut conversation: Conversation = Conversation::from_document(&doc);
-                let message: EncryptedMessage = encrypt_message(message, &conversation);
-                conversation.messages.push(message);
-                let doc = bson::to_document(&serde_json::to_value(&conversation).unwrap()).unwrap();
+        
+            Some(mut convo) =>
+            {   let message: EncryptedMessage = encrypt_message(message, &convo);
+                convo.messages.push(message);
+                let doc = bson::to_document(&serde_json::to_value(&convo).unwrap()).unwrap();
                 // TODO: make this an implementation of the conversation struct. Conversation::update()
                 mongo::get_collection("conversations")
-                    .replace_one(doc!("id": conversation.id), doc, None)
+                    .replace_one(doc!("id": convo.id), doc, None)
                     .unwrap();
                 Ok(())
             }
             None => Err("Could not find the conversation to uplaod to.".to_string())
-        },
-        Err(e) => Err(e.to_string())
     }
 }
 
@@ -239,28 +241,38 @@ pub fn upload_message(message: &RawMessage, convo_id: &str) -> Result<(), String
 //----------------------------------------------//
 
 /// Takes in a reference to an EncryptedMessage value and a private key ref, and spits out a RawMessage decrypted with the provided private key.
-fn decrypt_message(encrypted_message: &EncryptedMessage, private_key: &Rsa<Private>) -> RawMessage
+fn decrypt_message(caller: &str, encrypted_message: &EncryptedMessage, private_key: &Rsa<Private>, convo_id: &str) -> RawMessage
 {
-    /*
-    Takes in an encrypted message object and a private key, and returns a decrypted message object.
-    */
-
-    let mut decrypted_message: Vec<u8> = vec![0; private_key.size() as usize];
-    private_key
-        .private_decrypt(&encrypted_message.data, &mut decrypted_message, Padding::PKCS1)
-        .expect("failed to decrypt message");
-    let raw_str: String = String::from_utf8(decrypted_message)
+    // retrieve conversation object from db
+    let convo: Conversation = 
+        if let Some(convo) = Conversation::get(convo_id) {convo} 
+        else {panic!("Could not find conversation to decrypt message from.")};
+    // decrypt conversation key corresponding to you
+    let mut convokey: UserKey = convo
+        .keys
+        .iter()
+        .find(|x| x.owner == caller)
         .unwrap()
-        .trim_matches('\0') // remove trailing null bytes from when the serialized message was in bson form
-        .to_string();
-    serde_json::from_str(&raw_str).unwrap()
+        .clone();
+    let mut decrypted_convo_key: Vec<u8> = vec![0; private_key.size() as usize];
+    private_key
+        .private_decrypt(convokey.key.as_slice(), &mut decrypted_convo_key, Padding::PKCS1)
+        .expect("failed to decrypt convo key");
+    convokey.key = decrypted_convo_key.to_vec();
+    // decrypt the message with the decrypted conversation key
+    let cipher: symm::Cipher = symm::Cipher::aes_128_cbc();
+    let decrypted_message: Vec<u8> = symm::decrypt(cipher, convokey.key.as_slice(), None, encrypted_message.data.as_slice()).unwrap();
+    // deserialize the message
+    let message: RawMessage = serde_json::from_str(&String::from_utf8(decrypted_message).unwrap()).unwrap();
+    message
+
 }
 
 /// Takes in a conversation ID and returns a Result, either containing a Vec of RawMessages containing all decrypted messages, or a string if no messages were present in the conversation.
 ///
 /// Finds a conversation matching the conversation id, reads the user's private key from pkey.key, and decrypts all messages in the conversation value.
 
-pub fn receive_messages(convo_id: &str) -> Result<Vec<RawMessage>, String>
+pub fn receive_messages(caller: &str, convo_id: &str) -> Result<Vec<RawMessage>, String>
 {
     match mongo::get_collection("conversations").find_one(Some(doc! {"id": convo_id}), None)
     {
@@ -272,7 +284,7 @@ pub fn receive_messages(convo_id: &str) -> Result<Vec<RawMessage>, String>
                 let mut messages: Vec<RawMessage> = vec![];
                 let key: String = fs::read_to_string("src/userdata/pkey.key").expect("failed to open key file");
                 let key = Rsa::private_key_from_pem(key.as_bytes()).unwrap();
-                messages.extend(conversation.messages.iter().map(|x| decrypt_message(x, &key)));
+                messages.extend(conversation.messages.iter().map(|x| decrypt_message(caller, x, &key, convo_id)));
                 Ok(messages)
             }
             None => Err("conversation not found".to_string())

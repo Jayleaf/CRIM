@@ -201,7 +201,7 @@ fn draw_messenger_ui(user: &Account, convo: &Conversation)
             "".to_string(),
             "".to_string()
         ];
-        let messages: Vec<RawMessage> = receive_messages(convo.id.as_str()).unwrap();
+        let messages: Vec<RawMessage> = receive_messages(&user.username, convo.id.as_str()).unwrap();
         for message in messages
         {
             let messagecontent: String = String::from_utf8(message.message).unwrap();
