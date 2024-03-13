@@ -163,7 +163,7 @@ impl Conversation
 pub fn create_conversation(users: Vec<String>)
 {
 
-    let mut raw_conversation_key: [u8; 128] = [0; 128];
+    let mut raw_conversation_key: [u8; 32] = [0; 32];
     getrandom(&mut raw_conversation_key).expect("Failed to generate random conversation key.");
     let conversation = Conversation {
         id: super::utils::rand_hex(),
@@ -202,11 +202,13 @@ fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessa
         .clone();
 
     // then, decrypt that with your private key
-    let decrypted_key: Vec<u8> = UserKey::decrypt(&convokey, &convokey.key).key.as_slice().to_vec();
+    let mut decrypted_key: UserKey = UserKey::decrypt(&convokey, &convokey.key);
+    decrypted_key.key = decrypted_key.key.as_slice().to_vec();
+    decrypted_key.key.retain(|&x| x != 0_u8); // thanks, null bytes!
     // now, serialize the message payload, encrypt that serialized payload, and return the encrypted message object.
     let serialized_message: String = serde_json::to_string(&message).unwrap();
-    let cipher: symm::Cipher = symm::Cipher::aes_128_cbc();
-    let encrypted_message_struct: Vec<u8> = symm::encrypt(cipher, &decrypted_key, None, serialized_message.as_bytes()).unwrap();
+    let cipher: symm::Cipher = symm::Cipher::aes_256_cbc();
+    let encrypted_message_struct: Vec<u8> = symm::encrypt(cipher, &decrypted_key.key, None, serialized_message.as_bytes()).unwrap();
 
     // TODO: you stopped here. start to decrypt the messages next.
     EncryptedMessage { data: encrypted_message_struct }
@@ -259,8 +261,10 @@ fn decrypt_message(caller: &str, encrypted_message: &EncryptedMessage, private_k
         .private_decrypt(convokey.key.as_slice(), &mut decrypted_convo_key, Padding::PKCS1)
         .expect("failed to decrypt convo key");
     convokey.key = decrypted_convo_key.to_vec();
+    convokey.key.retain(|&x| x != 0_u8); // i <3 null bytes
     // decrypt the message with the decrypted conversation key
-    let cipher: symm::Cipher = symm::Cipher::aes_128_cbc();
+    let cipher: symm::Cipher = symm::Cipher::aes_256_cbc();
+
     let decrypted_message: Vec<u8> = symm::decrypt(cipher, convokey.key.as_slice(), None, encrypted_message.data.as_slice()).unwrap();
     // deserialize the message
     let message: RawMessage = serde_json::from_str(&String::from_utf8(decrypted_message).unwrap()).unwrap();
