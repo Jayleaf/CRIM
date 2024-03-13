@@ -1,6 +1,8 @@
 # CRIM | A Rust IM 🦀
 I've designed and worked on CRIM as a means to strengthen my understanding of Rust as a language, and to better familiarize myself with lower-level concepts, cybersecurity, and database management. I continually work to improve it and make it as secure as I can.
 
+A backend API will be created shortly for user authentication and more secure message transfer.
+
 ## Database
 CRIM uses mongoDB to store data externally, but can likely be refactored to use other databases so as long as they can be converted to a BSON format. Database details can be set in the `.env` file.
 
