@@ -75,7 +75,10 @@ impl UserKey
 #[derive(Serialize, Deserialize)]
 pub struct EncryptedMessage
 {
-    pub data: Vec<u8> // data contains a serialized message struct. see diagram in readme.md for more info.
+    pub data: Vec<u8>,
+    pub sender: String,
+    pub dest_convo_id: String,
+    pub sender_sid: String,
 }
 
 impl EncryptedMessage
@@ -90,7 +93,13 @@ impl EncryptedMessage
             .iter()
             .map(|x| x.as_i64().unwrap() as u8)
             .collect();
-        EncryptedMessage { data }
+        let sender: String = doc.get_str("sender").unwrap().to_string();
+        EncryptedMessage {
+            data,
+            sender,
+            dest_convo_id: String::new(),
+            sender_sid: String::new()
+        }
     }
 }
 
@@ -165,6 +174,8 @@ pub fn create_conversation(users: Vec<String>)
 
     let mut raw_conversation_key: [u8; 32] = [0; 32];
     getrandom(&mut raw_conversation_key).expect("Failed to generate random conversation key.");
+    while raw_conversation_key.iter().any(|x| *x == 0_u8) {getrandom(&mut raw_conversation_key).expect("Failed to generate random conversation key.");} // getrandom() can sometimes give a 0, which will fuck everything up.
+    
     let conversation = Conversation {
         id: super::utils::rand_hex(),
         users: users.clone(),
@@ -208,10 +219,11 @@ fn encrypt_message(message: &RawMessage, convo: &Conversation) -> EncryptedMessa
     // now, serialize the message payload, encrypt that serialized payload, and return the encrypted message object.
     let serialized_message: String = serde_json::to_string(&message).unwrap();
     let cipher: symm::Cipher = symm::Cipher::aes_256_cbc();
+    println!("{:#?}",decrypted_key.key);
     let encrypted_message_struct: Vec<u8> = symm::encrypt(cipher, &decrypted_key.key, None, serialized_message.as_bytes()).unwrap();
 
     // TODO: you stopped here. start to decrypt the messages next.
-    EncryptedMessage { data: encrypted_message_struct }
+    EncryptedMessage { data: encrypted_message_struct, sender: message.sender.clone(), dest_convo_id: convo.id.clone(), sender_sid: String::new()}
 }
 
 /// Uploads a RawMessage to a conversation in the database.* This is the entry point for sending a message, as `encrypt()` shouldn't be called directly.
